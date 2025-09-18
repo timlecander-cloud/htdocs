@@ -215,6 +215,7 @@ class ViewportCache {
   <option value="precinct">Voting Precincts</option>
   <option value="township">Townships</option>
   <option value="ward">Wards</option>
+  <option value="supervisor">Supervisors</option>
 </select>
 
 <!-- Area Options Dropdown -->
@@ -293,6 +294,7 @@ const MARKER_SIZE = 24; // Base size in pixels
 const townshipOptions = ['none', 'all', 'Bloomfield', 'Bluffton', 'Burr Oak', 'Calmar', 'Canoe', 'Decorah', 'Frankville', 'Fremont', 'Glenwood', 'Hesper', 'Highland', 'Jackson', 'Lincoln', 'Madison', 'Military', 'Orleans', 'Pleasant', 'Springfield', 'Sumner', 'Washington'];
 const precinctOptions = ['none', 'all', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 const wardOptions = ['none','DE1','DE2','DE3','DE4','DE5'];
+const supervisorOptions = ['none','1','2','3','4','5'];
 
 function clearMarkers() {
     markers.forEach(marker => {
@@ -342,6 +344,9 @@ function populateAreaOptions(view) {
       break;
     case 'ward':
       options = wardOptions;
+      break;
+    case 'supervisor':
+      options = supervisorOptions;
       break;
     default:
       console.warn(`Unknown view: ${view}`);
@@ -394,6 +399,10 @@ function handleView() {
       loadMarkersInBounds(currentView, selectedArea);
       break;
 
+    case 'supervisor':
+      loadMarkersInBounds(currentView, selectedArea);
+      break;    
+
     default:
       console.warn("Unknown view:", currentView);
       return;
@@ -434,6 +443,9 @@ async function loadMarkersInBounds(view, area) {
     case 'ward':
       wardParams = `wards=${encodeURIComponent(area)}`;
       break;
+    case 'supervisor':
+      supervisorParams = `supervisors=${encodeURIComponent(area)}`;
+      break;
   }
 
   const neighborhoodChecked = document.getElementById('filter-neighborhoods').checked;
@@ -441,7 +453,7 @@ async function loadMarkersInBounds(view, area) {
   //const filterInactiveOnly = document.getElementById('filter-voterstatus').checked;
   const filterStrongVotersOnly = document.getElementById('filter-strongvoters').checked;
 
-  fetch(`get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}`)
+  fetch(`get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`)
   .then(response => response.json())
   .then(data => {
     clearMarkers();

@@ -15,24 +15,28 @@ function logError($message) {
 
 try {
     // Database connection function
-    function getDbConnection() {
-	$GLOBALS['dbConnection'] = $GLOBALS['dbConnection'] ?? null;
-        if ($GLOBALS['dbConnection'] === null) {
-            $dbconn = pg_connect(
-                "host=localhost " .
-                "dbname=Winneshiek " .
-                "user=postgres " .
-                "password=(163Lydia)"
-            );
-            
-            if (!$dbconn) {
-                throw new Exception("Database connection failed: " . pg_last_error());
-            }
-            
-            $GLOBALS['dbConnection'] = $dbconn;
-        }
-        return $GLOBALS['dbConnection'];
-    }
+    //function getDbConnection() {
+	//$GLOBALS['dbConnection'] = $GLOBALS['dbConnection'] ?? null;
+    //    if ($GLOBALS['dbConnection'] === null) {
+    //        $dbconn = pg_connect(
+    //            "host=localhost " .
+    //            "dbname=Winneshiek " .
+    //            "user=postgres " .
+    //            "password=(163Lydia)"
+    //        );
+    //        
+    //        if (!$dbconn) {
+    //            throw new Exception("Database connection failed: " . pg_last_error());
+    //        }
+    //        
+    //        $GLOBALS['dbConnection'] = $dbconn;
+    //    }
+    //    return $GLOBALS['dbConnection'];
+    //}
+
+    require 'db_connection.php'; // Adjust path if needed
+
+    $conn = getDbConnection();
 
     $lat_north = $_GET['north'];
     $lat_south = $_GET['south'];
@@ -45,6 +49,8 @@ try {
     $precincts = array_filter(array_map('trim', explode(',', $rawPrecincts)));
     $rawWards = $_GET['wards'] ?? '';
     $wards = array_filter(array_map('trim', explode(',', $rawWards)));
+    $rawSupervisors = $_GET['supervisors'] ?? '';
+    $supervisors = array_filter(array_map('trim', explode(',', $rawSupervisors)));
 
     $includeNeighborhoods = isset($_GET['neighborhoods']) && $_GET['neighborhoods'] === 'true';
 
@@ -57,6 +63,7 @@ try {
     $pgTownshipArray = implode(',', $townships); // ✅ Now it's an array
     $pgPrecinctArray = implode(',', $precincts);
     $pgWardArray = implode(',', $wards);
+    $pgSupervisorArray = implode(',', $supervisors);
 
     //$params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray, $pgTownshipArray];
 
@@ -65,13 +72,17 @@ try {
     }
 
     // Get database connection
-    $conn = getDbConnection();
+    //require 'db_connection.php';
+
+    //$pdo = getDbConnection();
+    //$conn = getDbConnection();
 
     $markers = [];
 
     $townshipString = $pgTownshipArray;
     $precinctString = $pgPrecinctArray;
     $wardString = $pgWardArray;
+    $supervisorString = $pgSupervisorArray;
 
     //$params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray,$townshipString];
     // Assume $townshipString and $precinctString are already defined
@@ -87,6 +98,10 @@ try {
         case (!empty($wardString)):
             $areaString = $wardString;
             $target_field = 'city_council_ward';
+            break;
+        case (!empty($supervisorString)):
+            $areaString = $supervisorString;
+            $target_field = 'county_supervisor';
             break;
         default:
             $areaString = 'all'; // Fallback, could also be 'all'

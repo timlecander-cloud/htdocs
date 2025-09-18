@@ -5,7 +5,7 @@ error_reporting(E_ALL);
 
 require 'db_connection.php';
 
-$pdo = getDbConnection();
+$conn = getDbConnection(); // should return a pgsql connection resource
 
 $voter_id = $_GET['regn_num'] ?? null;
 if (!$voter_id) {
@@ -14,34 +14,33 @@ if (!$voter_id) {
     exit;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM persons4 WHERE regn_num = ?");
-$stmt->execute([$voter_id]);
-$data = $stmt->fetch(PDO::FETCH_ASSOC);
+// Prepare and execute voter details query
+pg_prepare($conn, "get_voter", "SELECT * FROM persons4 WHERE regn_num = $1");
+$result = pg_execute($conn, "get_voter", [$voter_id]);
 
+$data = pg_fetch_assoc($result);
 if (!$data) {
     http_response_code(404);
     echo json_encode(['error' => 'Voter not found']);
     exit;
 }
 
-// Fetch election history
-$historyStmt = $pdo->prepare("
+// Prepare and execute election history query
+pg_prepare($conn, "get_history", "
     SELECT General_Election_Year, General_Election_Method 
     FROM voter_election_history 
-    WHERE regn_num = ?
+    WHERE regn_num = $1
     ORDER BY General_Election_Year DESC
 ");
-$historyStmt->execute([$voter_id]);
-$historyRows = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+$historyResult = pg_execute($conn, "get_history", [$voter_id]);
 
-// Concatenate history into a string
 $historyString = '';
-foreach ($historyRows as $row) {
+while ($row = pg_fetch_assoc($historyResult)) {
     $year = $row['general_election_year'];
     $method = $row['general_election_method'];
     $historyString .= "$year ($method), ";
 }
-$historyString = rtrim($historyString, ', '); // remove trailing comma
+$historyString = rtrim($historyString, ', ');
 
 // Add to response
 $data['general_election_history'] = $historyString;
