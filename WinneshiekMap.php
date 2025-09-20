@@ -230,15 +230,22 @@ class ViewportCache {
   <label class="label not-registered"><input type="checkbox" value="Not registered" id="filter-nr"> Not registered</label>
 </div>
 
-<div class="strong-voter-filters">
-  <label class="label strongvoters"><input type="checkbox" value="Strong" id="filter-strongvoters"> Strong Voters Only</label>
-</div>
-
 <!-- ✅ New Neighborhoods checkbox -->
 <div class="neighborhood-filter">
   <label><input type="checkbox" id="filter-neighborhoods"> Neighborhoods Only</label>
 </div>
 
+<div class="strong-voter-filters">
+  <label class="label strongvoters"><input type="checkbox" value="Strong" id="filter-strongvoters"> Strong Voters Only</label>
+</div>
+
+<div class="young-strong-voter-filters">
+  <label class="label youngstrongvoters"><input type="checkbox" value="YoungStrong" id="filter-youngstrongvoters"> Young Strong Voters Only (under 28)</label>  
+</div>
+
+<div class="needs-ride-filter">
+  <label><input type="checkbox" id="filter-needs-ride"> Needs Ride to Poll</label>
+</div>  
 
 <!--
 <div class="voterstatus-filter">
@@ -261,6 +268,7 @@ class ViewportCache {
       <div class="modal-age"></div>
       <div class="modal-general_election_history"></div>
       <div class="modal-strong_voter"></div>
+      <div class="modal-young_strong_voter"></div>
     </div>
 
     <script>
@@ -431,6 +439,7 @@ async function loadMarkersInBounds(view, area) {
   let townshipParams = '';
   let precinctParams = '';
   let wardParams = '';
+  let supervisorParams = '';
   let markerCluster = null;
 
   switch (view) {
@@ -452,6 +461,8 @@ async function loadMarkersInBounds(view, area) {
   const neighborhoodParam = neighborhoodChecked ? '&neighborhoods=true' : '';
   //const filterInactiveOnly = document.getElementById('filter-voterstatus').checked;
   const filterStrongVotersOnly = document.getElementById('filter-strongvoters').checked;
+  const filterYoungStrongVotersOnly = document.getElementById('filter-youngstrongvoters').checked;
+  const filterNeedsRide = document.getElementById('filter-needs-ride').checked;
 
   fetch(`get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`)
   .then(response => response.json())
@@ -505,7 +516,9 @@ async function loadMarkersInBounds(view, area) {
             } else {
               //const strongVoterText = `Strong Voter: ${String(m.strong_voter).toLowerCase() === 'true' ? 'true' : 'false'}`;
               const strongVoterText = String(m.strong_voter).toLowerCase() === 'true' ? 'Strong Voter' : '';
-              return `${m.first_name} ${m.last_name} ${m.apartment} (${m.party}) ${m.voterstatus} ${m.voterid} ${strongVoterText}`;
+              const youngStrongVoterText = (filterYoungStrongVotersOnly && m.young_strong_voter && String(m.young_strong_voter).toLowerCase() === 'true') ? 'Young Strong Voter' : '';
+
+              return `${m.first_name} ${m.last_name} ${m.apartment} (${m.party}) ${m.voterstatus} ${m.voterid} ${strongVoterText} ${youngStrongVoterText}`;
             }
     	    }).join('\r\n');
 
@@ -593,31 +606,18 @@ async function loadMarkersInBounds(view, area) {
           const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(markerData.party);
           //const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
           const isStrongVoter = markerData.strong_voter === true || markerData.strong_voter === "true";
+          const isYoungStrongVoter = markerData.young_strong_voter === true || markerData.young_strong_voter === "true";
+          const isNeedsRide = String(markerData.needs_ride_to_poll).toLowerCase() === "t"; // PostgreSQL 't' for true
 
-          //console.log('isStrongVoter:', isStrongVoter, markerData.last_name);
+          //console.log('Marker LastName:', markerData.last_name, 'Marker Party:', markerData.party, 'IsValidParty:', isValidParty, 'IsStrongVoter:', isStrongVoter, 'IsYoungStrongVoter:', isYoungStrongVoter, 'NeedsRide:', isNeedsRide);
 
-          //const shouldDisplay = window.visibleParties.has(markerData.party) &&
-          //(!filterInactiveOnly || (isValidParty && isInactive));
-
-          const shouldDisplay = window.visibleParties.has(markerData.party) &&
-          (!filterStrongVotersOnly || (isValidParty && isStrongVoter));
-
-          //const shouldDisplay = window.visibleParties.has(markerData.party) && isValidParty && isStrongVoter;
-
-          //const shouldDisplay =
-          //  window.visibleParties.has(markerData.party) &&
-          //  (
-          //    !filterInactiveOnly || (isValidParty && isInactive)
-          //  ) &&
-          //  isStrongVoter;
-
-        //  const shouldDisplay =
-        //    window.visibleParties.has(markerData.party) &&
-        //    (
-        //      isStrongVoter ||
-        //      (!filterInactiveOnly || (isValidParty && isInactive))
-        //    );
-
+          const shouldDisplay =
+            window.visibleParties.has(markerData.party) &&
+            (
+              (!filterStrongVotersOnly || isStrongVoter) &&
+              (!filterYoungStrongVotersOnly || isYoungStrongVoter) &&
+              (!filterNeedsRide || isNeedsRide)
+            );
 
           // Markers with less than 10 use the new AdvancedMarkerElement
   			  const marker = new AdvancedMarkerElement({
@@ -677,6 +677,8 @@ function showVoterDetailsModal(voterIDArray = []) {
     .then(voterDetailsArray => {
       const contentHTML = voterDetailsArray.map(voter => {
         const age = calculateAge(voter.birthdate);
+        //const needsRide = ['true', 't', true].includes(voter.needs_ride);
+        const NeedsRide = voter.needs_ride_to_poll === 't'; // PostgreSQL 't' for true
         return `
           <div class="voter-block">
             <strong>${voter.first_name} ${voter.last_name}</strong><br>
@@ -685,6 +687,8 @@ function showVoterDetailsModal(voterIDArray = []) {
             Age: ${age}<br>
             History: ${voter.general_election_history || 'None'}<br>
             Strong Voter: ${voter.strong_voter ? 'Yes' : 'No'}<br>
+            Young Strong Voter: ${voter.young_strong_voter ? 'Yes' : 'No'}<br>
+            Needs ride to poll: ${NeedsRide ? 'Yes' : 'No'}<br>
           </div>
           <hr>
         `;

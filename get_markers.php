@@ -125,7 +125,7 @@ try {
 	    END || 
 	    COALESCE(p.post_dir || ' ', '') AS address,
             COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-            p.full_township as township, p.voterstatus as voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter
+            p.full_township as township, p.voterstatus as voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter, p.young_strong_voter as young_strong_voter, p.needs_ride_to_poll as needs_ride_to_poll
          FROM persons4 p
          WHERE p.latitude BETWEEN \$1 AND \$2
          AND p.longitude BETWEEN \$3 AND \$4
@@ -142,7 +142,7 @@ try {
 	        p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
 	        COALESCE(p.pre_dir || ' ', '') || p.street_name || ' ' || COALESCE(p.street_type, '') || COALESCE(p.post_dir || ' ', '') AS address,
 	        COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-	        p.full_township AS township, p.voterstatus AS voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter
+	        p.full_township AS township, p.voterstatus AS voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter, p.young_strong_voter as young_strong_voter, p.needs_ride_to_poll as needs_ride_to_poll
 	     FROM persons4 p
 	     JOIN addresses a
 	       ON a.addno_full = (
@@ -194,7 +194,9 @@ try {
             'township' => $row['township'],
             'voterstatus' => $row['voterstatus'],
             'voterid' => $row['voterid'],
-            'strong_voter' => $row['strong_voter']
+            'strong_voter' => $row['strong_voter'],
+            'young_strong_voter' => $row['young_strong_voter'], // Added 09-18-25
+            'needs_ride_to_poll' => $row['needs_ride_to_poll'] // Added 09-19-25
         ];
     }
     pg_free_result($result1);
@@ -255,7 +257,6 @@ try {
 
 	$query2 .= " ORDER BY p.longitude, p.latitude";
 
-
     //error_log('Query2: ' . $query2);
     //error_log('Params2: ' . implode(', ', $params2));
 
@@ -274,10 +275,12 @@ try {
             'party' => 'Not registered',
             'address' => $row['address'],
 	        'apartment' => $row['apartment'],
-            'township' => $row['township'],  // Add township to output
+            'township' => $row['township'],
 	        'voterstatus' => '',
 	        'voterid' => '',
 	        'strong_voter' => '',
+            'young_strong_voter' => '', // Added 09-18-25   
+            'needs_ride_to_poll' => '' // Added 09-19-25
         ];
     }
 
