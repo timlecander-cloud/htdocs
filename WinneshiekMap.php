@@ -243,15 +243,15 @@ class ViewportCache {
   <label class="label youngstrongvoters"><input type="checkbox" value="YoungStrong" id="filter-youngstrongvoters"> Young Strong Voters Only (under 28)</label>  
 </div>
 
+<div class="voterstatus-filter">
+  <label class="label inactivevoters"><input type="checkbox" value="Inactive" id="filter-voterstatus"> Inactive Voters Only (any party)</label>
+</div>
+
 <div class="needs-ride-filter">
   <label><input type="checkbox" id="filter-needs-ride"> Needs Ride to Poll</label>
 </div>  
 
-<!--
-<div class="voterstatus-filter">
-  <label class="label inactivevoters"><input type="checkbox" value="Inactive" id="filter-voterstatus"> Inactive Voters Only (any party)</label>
-</div>
-  -->
+
     </div>
 
     <div id="map"></div>
@@ -459,7 +459,7 @@ async function loadMarkersInBounds(view, area) {
 
   const neighborhoodChecked = document.getElementById('filter-neighborhoods').checked;
   const neighborhoodParam = neighborhoodChecked ? '&neighborhoods=true' : '';
-  //const filterInactiveOnly = document.getElementById('filter-voterstatus').checked;
+  const filterInactiveOnly = document.getElementById('filter-voterstatus').checked;
   const filterStrongVotersOnly = document.getElementById('filter-strongvoters').checked;
   const filterYoungStrongVotersOnly = document.getElementById('filter-youngstrongvoters').checked;
   const filterNeedsRide = document.getElementById('filter-needs-ride').checked;
@@ -487,7 +487,7 @@ async function loadMarkersInBounds(view, area) {
         if (group.length > 10) {
           const markerData = group[0];
           const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(markerData.party);
-          //const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
+          const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
           //const shouldDisplay = window.visibleParties.has(markerData.party) &&
           //  (!filterInactiveOnly || (isValidParty && isInactive));
           const shouldDisplay = window.visibleParties.has(markerData.party) && (isValidParty);
@@ -604,7 +604,7 @@ async function loadMarkersInBounds(view, area) {
   			  });
 
           const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(markerData.party);
-          //const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
+          const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
           const isStrongVoter = markerData.strong_voter === true || markerData.strong_voter === "true";
           const isYoungStrongVoter = markerData.young_strong_voter === true || markerData.young_strong_voter === "true";
           const isNeedsRide = String(markerData.needs_ride_to_poll).toLowerCase() === "t"; // PostgreSQL 't' for true
@@ -616,6 +616,7 @@ async function loadMarkersInBounds(view, area) {
             (
               (!filterStrongVotersOnly || isStrongVoter) &&
               (!filterYoungStrongVotersOnly || isYoungStrongVoter) &&
+              (!filterInactiveOnly || isInactive) &&
               (!filterNeedsRide || isNeedsRide)
             );
 
