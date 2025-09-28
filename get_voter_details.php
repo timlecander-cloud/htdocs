@@ -7,6 +7,7 @@ require 'db_connection.php';
 
 $conn = getDbConnection(); // should return a pgsql connection resource
 
+// Use error_log() to write to the server's error log:
 $voter_id = $_GET['regn_num'] ?? null;
 if (!$voter_id) {
     http_response_code(400);
@@ -14,9 +15,35 @@ if (!$voter_id) {
     exit;
 }
 
-// Prepare and execute voter details query
+//error_log("Debug: voter ID is $voter_id");
+
+//// Prepare and execute voter details query
+//pg_prepare($conn, "get_voter", "SELECT * FROM persons4 WHERE regn_num = $1");
+//$result = pg_execute($conn, "get_voter", [$voter_id]);
+//
+//$data = pg_fetch_assoc($result);
+//if (!$data) {
+//    http_response_code(404);
+//    echo json_encode(['error' => 'Voter not found']);
+//    exit;
+//}
+//
+//error_log("Voter data: " . print_r($data, true));
+
+if (!preg_match('/^\d+$/', $voter_id)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid voter ID']);
+    exit;
+}
+
 pg_prepare($conn, "get_voter", "SELECT * FROM persons4 WHERE regn_num = $1");
 $result = pg_execute($conn, "get_voter", [$voter_id]);
+
+if (!$result) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Database query failed']);
+    exit;
+}
 
 $data = pg_fetch_assoc($result);
 if (!$data) {

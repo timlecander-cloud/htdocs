@@ -277,7 +277,7 @@ try {
 	        'apartment' => $row['apartment'],
             'township' => $row['township'],
 	        'voterstatus' => '',
-	        'voterid' => '',
+	        'voterid' => 'not registered',
 	        'strong_voter' => '',
             'young_strong_voter' => '', // Added 09-18-25   
             'needs_ride_to_poll' => '' // Added 09-19-25
