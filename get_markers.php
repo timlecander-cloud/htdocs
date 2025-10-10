@@ -14,26 +14,6 @@ function logError($message) {
 }
 
 try {
-    // Database connection function
-    //function getDbConnection() {
-	//$GLOBALS['dbConnection'] = $GLOBALS['dbConnection'] ?? null;
-    //    if ($GLOBALS['dbConnection'] === null) {
-    //        $dbconn = pg_connect(
-    //            "host=localhost " .
-    //            "dbname=Winneshiek " .
-    //            "user=postgres " .
-    //            "password=(163Lydia)"
-    //        );
-    //        
-    //        if (!$dbconn) {
-    //            throw new Exception("Database connection failed: " . pg_last_error());
-    //        }
-    //        
-    //        $GLOBALS['dbConnection'] = $dbconn;
-    //    }
-    //    return $GLOBALS['dbConnection'];
-    //}
-
     require 'db_connection.php'; // Adjust path if needed
 
     $conn = getDbConnection();
@@ -56,26 +36,14 @@ try {
 
     $pgPartyArray = '{' . implode(',', array_map(function($s) { return '"' . $s . '"'; }, $parties)) . '}';
 
-    //error_log('Townships: ' . print_r($townships, true));
-    //error_log('Precincts: ' . print_r($precincts, true));
-    //error_log('Parties: ' . print_r($_GET['parties'], true));
-
     $pgTownshipArray = implode(',', $townships); // ✅ Now it's an array
     $pgPrecinctArray = implode(',', $precincts);
     $pgWardArray = implode(',', $wards);
     $pgSupervisorArray = implode(',', $supervisors);
 
-    //$params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray, $pgTownshipArray];
-
     if ($lat_north === null || $lat_south === null || $lng_east === null || $lng_west === null) {
         throw new Exception('Missing or invalid parameters');
     }
-
-    // Get database connection
-    //require 'db_connection.php';
-
-    //$pdo = getDbConnection();
-    //$conn = getDbConnection();
 
     $markers = [];
 
@@ -84,7 +52,6 @@ try {
     $wardString = $pgWardArray;
     $supervisorString = $pgSupervisorArray;
 
-    //$params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray,$townshipString];
     // Assume $townshipString and $precinctString are already defined
     switch (true) {
         case (!empty($townshipString)):
@@ -108,6 +75,34 @@ try {
             $target_field = 'full_township'; // Safe default
             break;
     }
+
+    $paramsLog = [
+        $_GET['north'] ?? null,
+        $_GET['south'] ?? null,
+        $_GET['east'] ?? null,
+        $_GET['west'] ?? null,                
+        $pgPartyArray,
+        $townshipString,
+        $includeNeighborhoods,
+        $precinctString,
+        $wardString,
+        $supervisorString,
+        $_SERVER['REMOTE_ADDR'] ?? null,
+        $_SERVER['HTTP_USER_AGENT'] ?? null
+    ];
+
+    $queryLog = "
+        INSERT INTO marker_request_log (
+            lat_north, lat_south, lng_east, lng_west, party, township, neighborhood,
+            precinct, ward, supervisor, ip_address, user_agent
+        ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10, $11, $12
+        )
+    ";
+
+    pg_query_params($conn, $queryLog, $paramsLog);
+
 
     $params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray, $areaString];
 
@@ -172,9 +167,6 @@ try {
 
     $query1 .= " ORDER BY p.longitude, p.latitude";
 
-    //error_log('Query: ' . $query1);
-    //error_log('Params: ' . implode(', ', $params1));
-
     $result1 = pg_query_params($conn, $query1, $params1);
 
     if (!$result1) {
@@ -202,7 +194,6 @@ try {
     pg_free_result($result1);
 
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgTownshipArray];
-    //$params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray, $areaString];
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $areaString];
 
     // Added 07-07-25 to suppress when Not Registered is not selected
@@ -211,7 +202,7 @@ try {
     // Modified 06-22-25 to address interpretation of 'all'	
 	// Added IncludeNeighborhoods
 	$query2 = sprintf(
-	    "SELECT a.latitude, a.longitude,
+	    "SELECT a.latitude, a.longitude, a.oid_,
 	        a.addno_full || ' ' || 
 		COALESCE(a.st_predir || ' ', '') || 
 		a.st_name || ' ' || 
@@ -257,9 +248,6 @@ try {
 
 	$query2 .= " ORDER BY p.longitude, p.latitude";
 
-    //error_log('Query2: ' . $query2);
-    //error_log('Params2: ' . implode(', ', $params2));
-
     $result2 = pg_query_params($conn, $query2, $params2);
 
     if (!$result2) {
@@ -277,7 +265,7 @@ try {
 	        'apartment' => $row['apartment'],
             'township' => $row['township'],
 	        'voterstatus' => '',
-	        'voterid' => 'not registered',
+	        'voterid' => $row['oid_'],
 	        'strong_voter' => '',
             'young_strong_voter' => '', // Added 09-18-25   
             'needs_ride_to_poll' => '' // Added 09-19-25
