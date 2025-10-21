@@ -269,7 +269,7 @@ class ViewportCache {
     </div>
 
     <div class="needs-ride-filter">
-      <label><input type="checkbox" id="filter-needs-ride"> Needs Ride to Poll</label>
+      <label><input type="checkbox" value="NeedsRide" id="filter-needs-ride"> Needs Ride to Poll</label>
     </div>  
   <!--<button id="drawRectangleBtn">Draw Rectangle</button>-->
   <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button>
@@ -312,28 +312,51 @@ class ViewportCache {
     <div class="modal-young_strong_voter"></div>
   </div>
 
+  <div id="progressWindow" style="
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 1px solid #ccc;
+    padding: 20px;
+    z-index: 9999;
+    display: none;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    text-align: center;
+  ">
+    <div style="margin-bottom: 10px;">Updating markers…</div>
+    <progress id="progressBar" value="0" max="100" style="width: 250px;"></progress>
+  </div>
+
   <script>
     // Declare global filter sets near the top of your script
-    window.visibleParties = new Set();
-    window.visibleTownships = new Set(); // if you're also using township filters
-    //window.shouldLoadMarkers = false;
+    //window.visibleParties = new Set();
+    window.activeFilters = new Set(); // includes DEM, REP, Strong, YoungStrong, etc.
+    //window.visiblePrecincts = new Set();
+    //window.visibleTownships = new Set(); // if you're also using township filters
+    //window.visibleWards = new Set();
+    //window.visibleSupervisors = new Set();
+    window.currentViewType = null; // 'precinct', 'township', etc.
+    window.selectedAreaValue = null; // e.g., 'Franklin 1'
+
 
     // Positions hamburger-btn
     document.getElementById('hamburger-btn').addEventListener('click', function() {
       const filterPanel = document.getElementById('filter-panel');
       filterPanel.style.display = (filterPanel.style.display === 'none' || filterPanel.style.display === '') ? 'block' : 'none';
+      //console.log('Filter panel toggled to', filterPanel.style.display, 'at', new Date().toISOString());
     });
   
   
-  let map;
-  let markers = [];
-  
+  window.allMarkers = []; // instead of markers = []
+
   const markerCache = new Map(); // voterId → marker
 
   let AdvancedMarkerElement; // 10-05-25 Steamlining creation of markers.
   const townshipOptions = ['none', 'all', 'Bloomfield', 'Bluffton', 'Burr Oak', 'Calmar', 'Canoe', 'Decorah', 'Frankville', 'Fremont', 'Glenwood', 'Hesper', 'Highland', 'Jackson', 'Lincoln', 'Madison', 'Military', 'Orleans', 'Pleasant', 'Springfield', 'Sumner', 'Washington'];
   const precinctOptions = ['none', 'all', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-  const wardOptions = ['none','DE1','DE2','DE3','DE4','DE5'];
+  const wardOptions = ['none','all','DE1','DE2','DE3','DE4','DE5'];
   const supervisorOptions = ['none','1','2','3','4','5'];
 
   let isDrawing = false;
@@ -346,7 +369,11 @@ class ViewportCache {
     REP: false,
     NP: false,
     OTH: false,
-    'Not Registered': false
+    'Not Registered': false,
+    'Strong': false,
+    'YoungStrong': false,
+    'Inactive': false,
+    'NeedsRide': false
     // add others as needed
   };
 
@@ -355,24 +382,14 @@ class ViewportCache {
     REP: false,
     NP: false,
     OTH: false,
-    'Not Registered': false
+    'Not Registered': false,
+    'Strong': false,
+    'YoungStrong': false,
+    'Inactive': false,
+    'NeedsRide': false
     // add others as needed
   };
 
-  const ENABLE_CLEARMARKER = false;
-
-  function clearMarkers() {
-    if (!ENABLE_CLEARMARKER) return;
-    console.log('clearMarkers called at', new Date().toISOString(), 'with', markers.length, 'markers');
-
-    markers.forEach(marker => {
-        marker.map = null; // Detach from map
-    });
-    markers.length = 0; // Clear the array without reassigning
-    console.log('clearMarkers called at', new Date().toISOString(), ' end');      
-  }
-
-  // Added 07-27-25
   // Dropdown population function
   function populateAreaOptions(view) {
     const areaSelector = document.getElementById('areaSelector');
@@ -409,9 +426,11 @@ class ViewportCache {
   // Initial population
   populateAreaOptions('precinct');
 
-  function handleView() {
+  async function handleView() {
   const currentView = document.getElementById('viewSelector').value;
   const selectedArea = document.getElementById('areaSelector').value;
+
+  console.log('handleView called at', new Date().toISOString(), 'with view:', currentView, 'and area:', selectedArea);
 
     switch (currentView) {
       case 'township':
@@ -420,23 +439,32 @@ class ViewportCache {
           return;
         }
 
-        console.log('loadMarkersInBouns called at', new Date().toISOString(), 'in township');
-        loadMarkersInBounds(currentView, selectedArea);
+        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in township');
+        await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'precinct':
-        console.log('loadMarkersInBouns called at', new Date().toISOString(), 'in precinct');        
-        loadMarkersInBounds(currentView, selectedArea);
+        if (selectedArea === 'none') {
+          console.log('No precinct selected, hiding all markers');
+          ['DEM', 'REP', 'NP', 'OTH', 'Not registered'].forEach(party => {
+            //console.log(`Hiding markers for party: ${party}`);
+            //setFilterVisibility(party, false); // 10-18-25 07:15 Need to address this separately. This has been deprecated.
+          });
+          return;
+        }
+        // handle precinct logic here
+        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in precinct');        
+        await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'ward':
-        console.log('loadMarkersInBouns called at', new Date().toISOString(), 'in ward');
-        loadMarkersInBounds(currentView, selectedArea);
+        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in ward');
+        await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'supervisor':
-        console.log('loadMarkersInBouns called at', new Date().toISOString(), 'in supervisor');
-        loadMarkersInBounds(currentView, selectedArea);
+        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in supervisor');
+        await loadMarkersInBounds(currentView, selectedArea);
         break;    
 
       default:
@@ -446,25 +474,26 @@ class ViewportCache {
   }
 
   // In your main HTML file
-  // 08-23-25 clusteredMarkers added
   async function loadMarkersInBounds(view, area) {
-    console.log('start loadMarkersInBounds at', new Date().toISOString(), 'with', markers.length, 'markers');
+    console.log('start loadMarkersInBounds at', new Date().toISOString(), 'with', window.allMarkers.length, 'markers');
 
-    // 10-05-25 redundant. Let initMap do it.
-    //const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-
-    const bounds = map.getBounds();
+    const bounds = window.map.getBounds();
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
-    const parties = Array.from(window.visibleParties);
+    const allFilters = Array.from(window.activeFilters);
+    const parties = allFilters.filter(f =>
+      ['DEM', 'REP', 'NP', 'OTH', 'Not registered'].includes(f)
+    );
+
     const partyParams = parties.map(p => `parties[]=${encodeURIComponent(p)}`).join('&');
+
+    console.log('Fetching markers with parties:', parties, 'and params:', partyParams);
 
     let townshipParams = '';
     let precinctParams = '';
     let wardParams = '';
     let supervisorParams = '';
-    let markerCluster = null;
-
+    
     switch (view) {
       case 'township':
         townshipParams = `townships=${encodeURIComponent(area)}`;
@@ -488,7 +517,6 @@ class ViewportCache {
     const filterNeedsRide = document.getElementById('filter-needs-ride').checked;
     const filterNotRegistered = document.getElementById('filter-nr').checked;
 
-    //const infoWindow = new google.maps.InfoWindow(); // Single InfoWindow instance for clustered markers.
     const contentString = `
     <div style="max-height: 200px; overflow-y: auto;">
       <p>This is a long block of text that will scroll if it exceeds 200px in height.</p>
@@ -504,30 +532,34 @@ class ViewportCache {
     const voterIdArray = []; //Moved outside fetch to accumulate IDs across all markers
     const voterAptArray = []; // Moved outside fetch to accumulate apt info
 
-    fetch(`get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`)
-    .then(response => response.json())
-    .then(data => {
-      clearMarkers();
+    const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
+
+    try {
+      const response = await fetch(url);
+      console.log('Response received at', new Date().toISOString());
+
+      const data = await response.json();
+      console.log('Parsed JSON at', new Date().toISOString());
+      console.log('Fetched', data.markers?.length || 0, 'markers from server in loadMarkersInBounds at', new Date().toISOString());
 
       if (data.markers) {
         const positionGroups = {};
-        data.markers.forEach(markerData => {
+        for (const markerData of data.markers) {
           const positionKey = `${markerData.latitude},${markerData.longitude}`;
           if (!positionGroups[positionKey]) {
             positionGroups[positionKey] = [];
           }
           positionGroups[positionKey].push(markerData);
-        }); // End of forEach markerData
+        }
 
-        Object.values(positionGroups).forEach(group => {
+        //Object.values(positionGroups).forEach(group => {
+        for (const group of Object.values(positionGroups)) {
           group.sort((a, b) => a.last_name.localeCompare(b.last_name));
 
           let voterIdArray = []; // Local array for clustered markers
           let voterAptArray = []; // Local array for apartment info
           const markerData = group[0];
 
-          //const apt_info = markerData.apartment;
-          
           const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(markerData.party);
           const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
           const isStrongVoter = markerData.strong_voter === true || markerData.strong_voter === "true";
@@ -543,36 +575,45 @@ class ViewportCache {
           const groupHasNeedsRide = group.some(m => String(m.needs_ride_to_poll).toLowerCase() === "t");
           const groupHasNeedsRideCount = group.filter(m => String(m.needs_ride_to_poll).toLowerCase() === "t").length;
 
-          group.forEach(m => {
-            let shouldInclude;
+          let shouldInclude;
 
-            if (String(m.party).toLowerCase() === 'not registered') {
-              // ✅ Handle Not Registered voters independently
-              shouldInclude = filterNotRegistered;
-            } else {
-              // ✅ Apply full filter stack for registered voters
-              const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(String(m.party).toUpperCase());
+          //console.log('m.party for group:', group.map(m => m.party)); // Returns valid party values
+          //console.log('Coordinates for group:', group.map(m => `${m.latitude},${m.longitude}`));
+
+          //if (String(m.party).toLowerCase() === 'not registered') {
+          //  // ✅ Handle Not Registered voters independently
+          //  shouldInclude = filterNotRegistered;
+          //} else {
+            // ✅ Apply full filter stack for registered voters
+            for (const m of group) {
+              const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(String(m.party).toUpperCase()); // << Changed
+              const isNotRegistered = m.party.toLowerCase() === 'not registered';
               const isInactive = m.voterstatus?.toLowerCase().trim() === 'inactive';
               const isStrongVoter = m.strong_voter === true || m.strong_voter === "true";
               const isYoungStrongVoter = m.young_strong_voter === true || m.young_strong_voter === "true";
               const isNeedsRide = String(m.needs_ride_to_poll).toLowerCase() === "t";
 
               shouldInclude =
-                window.visibleParties.has(m.party) &&
-                isValidParty &&
                 (
-                  (!filterStrongVotersOnly || isStrongVoter) &&
-                  (!filterYoungStrongVotersOnly || isYoungStrongVoter) &&
-                  (!filterInactiveOnly || isInactive) &&
-                  (!filterNeedsRide || isNeedsRide)
-                );
-            }              
+                  isValidParty &&
+                  (
+                    window.activeFilters.has(m.party) ||
+                    (isStrongVoter && window.activeFilters.has('Strong')) ||
+                    (isYoungStrongVoter && window.activeFilters.has('YoungStrong')) ||
+                    (isInactive && window.activeFilters.has('Inactive')) ||
+                    (isNeedsRide && window.activeFilters.has('NeedsRide'))
+                  )
+                ) ||
+                (
+                  isNotRegistered && window.activeFilters.has('Not registered')
+                );                
 
-            if (shouldInclude && m.voterid) {
-              voterIdArray.push(m.voterid);
-              voterAptArray.push(m.apartment);
-            }
-          }); // End for each m in group
+                if (shouldInclude && m.voterid) {
+                  voterIdArray.push(m.voterid);
+                  voterAptArray.push(m.apartment);
+                }
+            } // End for m of group 10-19-25 13-41
+          //}
 
           const labelText = `${voterIdArray.length} voters\n`;
           const address = group[0]?.address || 'Unknown address';
@@ -588,129 +629,164 @@ class ViewportCache {
             .join('\r\n');
 
             // If voterIdArray is > 10, use circle with count label. Otherwise, use offset markers.
-            if (voterIdArray.length > 10) {
-              if (!markerCache.has(voterIdArray[1])) {
-                const container = document.createElement('div');
-                container.style.position = 'relative';
-                container.style.display = 'flex';
-                container.style.flexDirection = 'column';
-                container.style.alignItems = 'center';
+          if (voterIdArray.length > 10) {
+            if (!markerCache.has(voterIdArray[1])) {
+              const container = document.createElement('div');
+              container.style.position = 'relative';
+              container.style.display = 'flex';
+              container.style.flexDirection = 'column';
+              container.style.alignItems = 'center';
 
-                // 09-22-25 For "clustered" groups, use a yellow circle rather than glimph
-                const circle = document.createElement('div');
-                circle.style.width = '40px';       // scale * 2
-                circle.style.height = '40px';
-                circle.style.borderRadius = '50%';
-                circle.style.backgroundColor = '#FFFF00';  // fillColor
-                circle.style.opacity = '0.9';              // fillOpacity
-                circle.style.border = '1px solid #fff';    // strokeColor + strokeWeight
-                circle.style.boxSizing = 'border-box';
+              // 09-22-25 For "clustered" groups, use a yellow circle rather than glimph
+              const circle = document.createElement('div');
+              circle.style.width = '40px';       // scale * 2
+              circle.style.height = '40px';
+              circle.style.borderRadius = '50%';
+              circle.style.backgroundColor = '#FFFF00';  // fillColor
+              circle.style.opacity = '0.9';              // fillOpacity
+              circle.style.border = '1px solid #fff';    // strokeColor + strokeWeight
+              circle.style.boxSizing = 'border-box';
+            
+              // Label
+              const label = document.createElement('div');
+              label.textContent = labelText; // or dynamic content
+              label.style.position = 'absolute';
+              label.style.top = '50%';
+              label.style.left = '50%';
+              label.style.transform = 'translate(-50%, -50%)';
+              label.style.fontSize = '16px';
+              label.style.fontWeight = 'bold';
+              label.style.color = '#000';
+
+              // Assemble
+              container.appendChild(circle);
+              container.appendChild(label);
+
+              const partyCounts = group.reduce((acc, m) => {
+                const party = m.party || 'UNK';
+                acc[party] = (acc[party] || 0) + 1;
+                return acc;
+              },
+              {} // Needed apparently. Otherwise, includes latitude, etc.
+              ); // End of reduce
+
+              const partySummary = Object.entries(partyCounts).map(([party, count]) => `${party}: ${count}`).join(', ');
+
+              const tooltipContent = `${address}\r\n${partySummary}`;
+
+              container.title = tooltipContent;
               
-                // Label
-                const label = document.createElement('div');
-                label.textContent = labelText; // or dynamic content
-                label.style.position = 'absolute';
-                label.style.top = '50%';
-                label.style.left = '50%';
-                label.style.transform = 'translate(-50%, -50%)';
-                label.style.fontSize = '16px';
-                label.style.fontWeight = 'bold';
-                label.style.color = '#000';
-
-                // Assemble
-                container.appendChild(circle);
-                container.appendChild(label);
-
-                const partyCounts = group.reduce((acc, m) => {
-                  const party = m.party || 'UNK';
-                  acc[party] = (acc[party] || 0) + 1;
-                  return acc;
+              const marker = new AdvancedMarkerElement({
+                position: {
+                  lat: parseFloat(markerData.latitude),
+                  lng: parseFloat(markerData.longitude)
                 },
-                {} // Needed apparently. Otherwise, includes latitude, etc.
-                ); // End of reduce
+                map: window.map,                
+                content: container
+              }); // End of marker
 
-                const partySummary = Object.entries(partyCounts).map(([party, count]) => `${party}: ${count}`).join(', ');
+              // Attach metadata manually
+              const party = markerData.party;
+              const precinct = markerData.precinct;
+              const township = markerData.township;
+              const ward = markerData.ward;
+              const supervisor = markerData.supervisor;
 
-                const tooltipContent = `${address}\r\n${partySummary}`;
+              marker.metadata = {
+                party,
+                precinct,
+                township,
+                ward,
+                supervisor,
+                strong_voter: markerData.strong_voter,
+                young_strong_voter: markerData.young_strong_voter,
+                voterstatus: markerData.voterstatus,
+                needs_ride_to_poll: markerData.needs_ride_to_poll
+              };                      
 
-                container.title = tooltipContent;
-                
-                const marker = new AdvancedMarkerElement({
-                  position: {
-                    lat: parseFloat(markerData.latitude),
-                    lng: parseFloat(markerData.longitude)
-                  },
-                  map: map,                
-                  content: container
-                  //zIndex: 1000 - index
-                }); // End of marker
+              attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
 
-                attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
+              marker.data = markerData; // Stuff things party, etc. 
+              markerCache.set(voterIdArray[1], marker); // cache for reuse
+              window.allMarkers.push(marker); // For "clustered" Markers
+            } // End of if (!markerCache.has(voterIdArray[1]))
+          } else { // End if voterIdArray.length > 10
+            group.forEach(markerData => {
+              voterIdArray.forEach((id, index) => {
+                if (id === markerData.voterid) {
+                  if (!markerCache.has(markerData.voterid)) {   
+                    const baseSize = 24;
+                    const sizeReduction = -4;
+                    const minSize = 12;
+                    const markerSize = Math.max(baseSize - (index * sizeReduction), minSize);
+                    const offset = index * 3;
+                    const party = markerData.party;
+                    const precinct = markerData.precinct;
+                    const township = markerData.township;
+                    const ward = markerData.ward;
+                    const supervisor = markerData.supervisor;
 
-                marker.data = markerData; // Stuff things party, etc. 
-                markerCache.set(voterIdArray[1], marker); // cache for reuse
-                markers.push(marker); // For "clustered" Markers
-              } // End if !markerCache.has(voterIdArray[1])
-            } else {
-              group.forEach(markerData => {
-                voterIdArray.forEach((id, index) => {
-                  if (id === markerData.voterid) {
-                    //console.log(markerCache.has(markerData.voterid))
-                    //logAllMarkersInCache();
-                    if (!markerCache.has(markerData.voterid)) {   
-                      //console.log('Start creating new marker for id:', id); reports persons4.regn_num
-                      //console.log('Start creating new marker for voterId:', markerData.voterid, markerCache.voterid); // reports person4.reg_num
-                      const baseSize = 24;
-                      const sizeReduction = -4;
-                      const minSize = 12;
-                      const markerSize = Math.max(baseSize - (index * sizeReduction), minSize);
-                      const offset = index * 3;
+                    const markerElement = document.createElement('div');
+                    markerElement.className = 'custom-marker';
+                    markerElement.dataset.party = markerData.party;
+                    markerElement.dataset.township = markerData.township;
+                    markerElement.innerHTML = `
+                      <svg viewBox="0 0 24 24" 
+                      width="${markerSize}" 
+                      height="${markerSize}" 
+                      style="margin-left: ${offset}px; margin-top: ${-offset}px;">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" 
+                      fill="${getPartyColor(markerData.party, markerData.voterstatus)}" 
+                      stroke="black" stroke-width="1"/>
+                      </svg>
+                    `;
 
-                      const markerElement = document.createElement('div');
-                      markerElement.className = 'custom-marker';
-                      markerElement.dataset.party = markerData.party;
-                      markerElement.dataset.township = markerData.township;
-                      markerElement.innerHTML = `
-                        <svg viewBox="0 0 24 24" 
-                        width="${markerSize}" 
-                        height="${markerSize}" 
-                        style="margin-left: ${offset}px; margin-top: ${-offset}px;">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" 
-                        fill="${getPartyColor(markerData.party, markerData.voterstatus)}" 
-                        stroke="black" stroke-width="1"/>
-                        </svg>
-                      `;
+                    const tooltipContent = `${address}\r\n${namesList}`;
 
-                      const tooltipContent = `${address}\r\n${namesList}`;
+                    markerElement.title = tooltipContent;
 
-                      markerElement.title = tooltipContent;
+                    const marker = new AdvancedMarkerElement({
+                      position: {
+                        lat: parseFloat(markerData.latitude),
+                        lng: parseFloat(markerData.longitude)
+                      },
+                      map: window.map,
+                      content: markerElement,
+                      zIndex: 1000 - index
+                    }); // End of marker
 
-                      const marker = new AdvancedMarkerElement({
-                        position: {
-                          lat: parseFloat(markerData.latitude),
-                          lng: parseFloat(markerData.longitude)
-                        },
-                        map: map,
-                        content: markerElement,
-                        zIndex: 1000 - index
-                      }); // End of marker
+                    // Attach metadata manually
+                    marker.metadata = {
+                      party,
+                      precinct,
+                      township,
+                      ward,
+                      supervisor,
+                      strong_voter: markerData.strong_voter,
+                      young_strong_voter: markerData.young_strong_voter,
+                      voterstatus: markerData.voterstatus,
+                      needs_ride_to_poll: markerData.needs_ride_to_poll
+                    };                      
 
-                      attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
+                    attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
 
-                      //console.log(markerData.voterid,markerData.party);
-                      marker.data = markerData; // Stuff things party, etc. 
-                      markerCache.set(markerData.voterid, marker); // cache for reuse
-                      markers.push(marker); // For non-clustered Markers
-                      //console.log('End creating new marker for voterId:', voterid);
-                    } // end if if (!markerCache.has(markerData.voterid))
-                  }
-                });
-              });
-            };
-        }); // End of Object.values(positionGroups).forEach
+                    marker.data = markerData; // Stuff things party, etc. 
+                    markerCache.set(markerData.voterid, marker); // cache for reuse
+                    window.allMarkers.push(marker); // For non-clustered Markers
+
+                    //console.log('Created marker for voterid:', markerData.voterid, 'at', new Date().toISOString(), 'with metadata:', marker.metadata);
+                  } // end if if (!markerCache.has(markerData.voterid))
+                } // End of id check
+              }); // End of voterIdArray.forEach
+            }); // End of group.forEach (groups < 10)
+          } // End of else (voterIdArray.length <= 10
+        }
       }
-    }); // End then data
-    console.log('stop loadMarkersInBounds at', new Date().toISOString(), 'with', markers.length, 'markers');    
+    } catch (error) { // End of try-catch
+      console.error('Error in loadMarkersInBounds fetch:', error);
+    }
+
+    console.log('stop loadMarkersInBounds at', new Date().toISOString(), 'with', window.allMarkers.length, 'markers');    
   } // End of loadMarkersInBounds
 
   const ENABLE_MARKER_CLICK = true;
@@ -811,72 +887,46 @@ class ViewportCache {
   async function initMap() {
     // First import the libraries
     const { Map } = await google.maps.importLibrary("maps");
-    //const { AdvancedMarkerElement, PinElement: Pin } = await google.maps.importLibrary("marker");
     
-    // 10-05-25 Declared global AdvancedMarkerElement in liue of below.
-    //const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
     const { AdvancedMarkerElement: AME } = await google.maps.importLibrary("marker");
     const { DrawingManager } = await google.maps.importLibrary("drawing");
     
     AdvancedMarkerElement = AME;    
 
     startLatLng = null;
-    //tempRectangle = null;
     rectangleOverlay = null;
     isDrawing = false;
       
-      // 10-05-25 deprecated. old.
-      // Now define your custom PinElement class
-      //PinElement = class extends Pin {
-      //  constructor(background) {
-      //    super({
-      //      background: background,
-      //      borderColor: '#000000',
-      //      glyphColor: '#FFFFFF',
-      //      scale: 1.0
-      //    });
-      //  }
-      //};
+    //map = new google.maps.Map(document.getElementById('map'), {
+    window.map = new google.maps.Map(document.getElementById('map'), {
+      //zoom: 18, // Includes about square mile
+      //zoom: 20, // To debug local neighborhood
+      //zoom: 8, //Entire MidWest
+      //zoom: 16, // about two sq. miles.
+      zoom: 11.8, // Entire Winneshiek County
+      //center: {lat: 43.38024, lng: -91.85018} // Compound
+      //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
+      center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
+      //center: {lat: 43.30473, lng: -91.80182} //502 Mound St
+      ,
+      mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
+    });
 
-      map = new google.maps.Map(document.getElementById('map'), {
-        //zoom: 18, // Includes about square mile
-        //zoom: 20, // To debug local neighborhood
-        //zoom: 8, //Entire MidWest
-        //zoom: 16, // about two sq. miles.
-        zoom: 11.8, // Entire Winneshiek County
-        //center: {lat: 43.38024, lng: -91.85018} // Compound
-        //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
-        center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
-        //center: {lat: 43.30473, lng: -91.80182} //502 Mound St
-        ,
-        mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
-      });
-        
-      initFilters();
-
-    // Added 06-20-25 09:15
-    // Let filters control when to load markers
-    //window.shouldLoadMarkers = false;
+    console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
+      
+    initFilters();
 
     // Optionally enable map movement logic *after* filters are active
-    map.addListener('idle', () => {
-      //if (window.shouldLoadMarkers) {
-        console.log('handleView called at', new Date().toISOString(), 'in addListener idle');        
-        handleView();
-      //}
+    window.map.addListener('idle', () => {
+      console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in addListener idle');        
+      //handleView();
+      handleViewAndUpdate(); // New combined function
+      console.log('calling removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
+      removeOutOfBoundsAdvancedMarkers(window.map, window.allMarkers);
+      console.log('done with removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
+      addInBoundsAdvancedMarkers(window.map, markerCache, window.allMarkers);
     });
     
-    //map.addListener('idle', () => {
-    //  const currentFilterState = getCurrentFilterState();
-    //  if (hasFilterChanged(currentFilterState)) {
-    //    console.log('handleView called at', new Date().toISOString(), 'in addListener idle');
-    //    handleView();
-    //    lastFilterState = currentFilterState;
-    //  } else {
-    //    console.log('No filter change detected. Skipping handleView.');
-    //  }
-    //});
-
     const drawBtn = document.getElementById('drawRectangleBtn');
     const tooltip = document.getElementById('drawTooltip');
 
@@ -902,13 +952,15 @@ class ViewportCache {
       }
     });
 
-    map.addListener('mousedown', (e) => {
+    //map.addListener('mousedown', (e) => {
+    window.map.addListener('mousedown', (e) => {
       updateDebugOverlay();
       if (!isDrawing) return;
       startLatLng = e.latLng;
     });
 
-    map.addListener('mousemove', (e) => {
+    //map.addListener('mousemove', (e) => {
+    window.map.addListener('mousemove', (e) => {
       updateDebugOverlay();
       if (!isDrawing || !startLatLng) return;
 
@@ -929,7 +981,8 @@ class ViewportCache {
       }
     });
 
-    map.addListener('mouseup', () => {
+    //map.addListener('mouseup', () => {
+    window.map.addListener('mouseup', () => {
       updateDebugOverlay();
       if (!isDrawing) return;
 
@@ -979,69 +1032,59 @@ class ViewportCache {
 
   // Add this after your map initialization
   function initFilters() {
-    // 10-04-25 deprecate? Doubling on also on getElementById('filter-panel')
-    //// Activate marker loading when any checkbox changes (added 06-20-25 9:15)
-    //window.shouldLoadMarkers = false;
-    //const filterIds = ['filter-dem', 'filter-rep', 'filter-np', 'filter-oth', 'filter-nr'];
-
-    //filterIds.forEach(id => {
-    //  const checkbox = document.getElementById(id);
-    //  if (checkbox) {
-    //    checkbox.addEventListener('change', () => {
-    //      window.shouldLoadMarkers = true;
-    //      console.log('handleView called at', new Date().toISOString(), 'in getElementByID for id');
-    //      handleView();
-    //    });
-    //  }
-    //}); // forEach
-
     const filterDiv = document.getElementById('filter-panel');
     filterDiv.addEventListener('change', (e) => {
       if (e.target.type === 'checkbox') {
-        const partyName = e.target.value;
+        const filterKey = e.target.value;
         const isChecked = e.target.checked;
+        console.log('Checkbox changed for filter:', filterKey, 'checked:', isChecked);
 
-        // Update global visibleParties set
         if (isChecked) {
-          window.visibleParties.add(partyName);
+          window.activeFilters.add(filterKey);
         } else {
-          window.visibleParties.delete(partyName);
+          window.activeFilters.delete(filterKey);
         }
 
-        // Call our smart toggle logic
-        onPartyCheckboxChange(partyName, isChecked);
-
-        // Optional: still set this if other logic depends on it
-        //window.shouldLoadMarkers = true;
+        //onFilterCheckboxChange(filterKey, isChecked); // Deprecated 10-18-25
+        //handleView(); // Experimental
+        //updateMarkerVisibility(); // Experimental
+        console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in filter panel change event');
+        handleViewAndUpdate(); // New combined function
       }
-});
+    });
 
     // Event listener to switch view
-    document.getElementById('viewSelector').addEventListener('change', function () {
+    document.getElementById('viewSelector').addEventListener('change', function (e) {
       const selectedView = this.value;
       populateAreaOptions(selectedView);
-      console.log('handleView called at', new Date().toISOString(), 'in viewSelector addEventListener');
-      handleView();
-    }); // viewSelector change event
 
-    // Added 07-27-25
+      // Update global view type
+      window.currentViewType = selectedView;
+
+      // Update selected area value after repopulating options
+      const areaSelector = document.getElementById('areaSelector');
+      window.selectedAreaValue = areaSelector?.value || null;
+
+      console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in viewSelector addEventListener');
+
+      //handleView();
+      //updateMarkerVisibility();
+      handleViewAndUpdate(); // New combined function
+    });
+
     // Event listener to switch view
-    document.getElementById('areaSelector').addEventListener('change', function () {
+    document.getElementById('areaSelector').addEventListener('change', function (e) {
       const selectedArea = this.value;
       console.log('handleView called at', new Date().toISOString(), 'in areaSelector addEventListener');      
-      handleView();
+      //handleView();
+      window.selectedAreaValue = e.target.value; // e.g., 'Franklin 1'
+      console.log('Selected area value:', window.selectedAreaValue);
+      //updateMarkerVisibility();
+      console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in areaSelector change event');
+      handleViewAndUpdate(); // New combined function
     }); // areaSelector change event
-  } // End of initFilters
 
-  function updateMarkerVisibility() {
-    markers.forEach(marker => {
-      const party = marker.content.dataset.party;
-      const township = marker.content.dataset.township;
-      const isPartyVisible = window.visibleParties.has(party);
-      const isTownshipVisible = window.visibleTownships.has('all') || window.visibleTownships.has(township);
-      marker.map = (isPartyVisible && isTownshipVisible) ? map : null;
-    });
-  }
+  } // End of initFilters
 
   function updateDebugOverlay() {
     const overlay = document.getElementById('debugOverlay');
@@ -1053,52 +1096,51 @@ class ViewportCache {
     `;
   }
 
-  //function onPartyCheckboxChange(partyName, isChecked) {
-  //  if (isChecked && !selectedParties[partyName]) {
-  //    selectedParties[partyName] = true;
-  //    console.log('calling handleView in onPartyCheckboxChange');
-  //    handleView(partyName); // load markers for this party
-  //  } else if (!isChecked && selectedParties[partyName]) {
-  //    console.log('onPartyCheckboxChange selectedParties[partyName]:', selectedParties[partyName], ' partyName: ',partyName);
-  //    selectedParties[partyName] = false;
-  //    setPartyVisibility(partyName, false); // hide markers
-  //  }
-  //}
+  // function onFilterCheckboxChange(filterKey, isChecked) {
+  //   const wasSelected = selectedParties[filterKey] === true;
+  //   const wasLoaded = loadedParties[filterKey] === true;
 
-  function onPartyCheckboxChange(partyName, isChecked) {
-    const wasSelected = selectedParties[partyName] === true;
-    const wasLoaded = loadedParties[partyName] === true;
+  //   if (isChecked && !wasLoaded) {
+  //     loadedParties[filterKey] = true;
+  //     selectedParties[filterKey] = true;
+  //     console.log('calling handleView for first-time load of', filterKey);
+  //     handleView(filterKey);
+  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
+  //   } else if (isChecked && wasLoaded && !wasSelected) {
+  //     selectedParties[filterKey] = true;
+  //     //setFilterVisibility(filterKey, true);
+  //     console.log('calling updateMarkerVisibilityEfficient for re-selection of point 1', filterKey);
+  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
+  //   } else if (!isChecked && wasSelected) {
+  //     selectedParties[filterKey] = false;
+  //     //setFilterVisibility(filterKey, false);
+  //     console.log('calling updateMarkerVisibilityEfficient for de-selection of point 2', filterKey);
+  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
+  //   }
+  // }
 
-    if (isChecked && !wasLoaded) {
-      // First time ever → load markers
-      loadedParties[partyName] = true;
-      selectedParties[partyName] = true;
-      console.log('calling handleView for first-time load of', partyName);
-      handleView(partyName);
-    } else if (isChecked && wasLoaded && !wasSelected) {
-      // Already loaded, just re-show
-      selectedParties[partyName] = true;
-      //console.log('re-showing markers for', partyName);
-      setPartyVisibility(partyName, true);
-    } else if (!isChecked && wasSelected) {
-      // Hide markers
-      selectedParties[partyName] = false;
-      //console.log('hiding markers for', partyName);
-      setPartyVisibility(partyName, false);
-    }
-  }
+  // function setFilterVisibility(filterKey, isVisible) {
+  //   // 10-18-25 07-13 I think only one value is present in filterKey at a time. This doesn't do much good.
+  //   console.log('setFilterVisibility called for filterKey:', filterKey, 'isVisible:', isVisible);
+  //   for (const [id, marker] of markerCache.entries()) {
+  //     //console.log('setFilterVisibility: Checking marker id:', id, 'for filterKey:', filterKey);
+  //     const data = marker.data;
+  //     if (!data || !marker.element) continue;
 
-  function setPartyVisibility(partyName, isVisible) {
-    for (const [id, marker] of markerCache.entries()) {
-      const data = marker.data;
-      //console.log(data); undefined
-      //console.log(marker.data); undefined
-      //console.log('setPartyVisibility for:', id); reports e.g. persons4.regn_num
-      if (data.party === partyName) {
-        marker.element.style.display = isVisible ? 'block' : 'none';
-      }
-    }
-  }
+  //     //console.log('Marker data for id:', id, data);
+
+  //     const matches =
+  //       data.party === filterKey ||
+  //       data.strong_voter === true && filterKey === 'Strong' ||
+  //       data.young_strong_voter === true && filterKey === 'YoungStrong' ||
+  //       data.inactive === true && filterKey === 'Inactive' ||
+  //       data.needs_ride === true && filterKey === 'NeedsRide';
+
+  //     if (matches) {
+  //       marker.element.style.display = isVisible ? 'block' : 'none';
+  //     }
+  //   }
+  // }
 
   function logAllMarkersInCache() {
   console.log('🔍 Dumping markerCache contents:');
@@ -1131,6 +1173,121 @@ function hasFilterChanged(currentState) {
   const keys = Object.keys(currentState);
   if (keys.length !== Object.keys(lastFilterState).length) return true;
   return keys.some(key => currentState[key] !== lastFilterState[key]);
+}
+
+function removeOutOfBoundsAdvancedMarkers(map, markersArray) {
+  const bounds = map.getBounds();
+  if (!bounds) return;
+
+  let removedCount = 0;
+
+  for (let i = markersArray.length - 1; i >= 0; i--) {
+    const marker = markersArray[i];
+    if (!bounds.contains(marker.position)) {
+      marker.map = null; // Removes from map
+      markersArray.splice(i, 1); // Removes from array
+      removedCount++;
+    }
+  }
+
+  console.log(`Removed ${removedCount} out-of-bounds marker${removedCount !== 1 ? 's' : ''}.`);
+}
+
+function addInBoundsAdvancedMarkers(map, markerCache, activeMarkersArray) {
+  const bounds = map.getBounds();
+  if (!bounds) return;
+
+  let addedCount = 0;
+
+  for (const [voterid, marker] of markerCache.entries()) {
+    const metadata = marker.metadata || {};
+    const areaValue = metadata[window.currentViewType]; // e.g., metadata.township
+
+    // Check if marker matches current view filter
+    let matchesView = true;
+    if (window.currentViewType && window.selectedAreaValue) {
+      const selected = window.selectedAreaValue.toLowerCase().trim();
+      matchesView = selected === 'all' || areaValue === window.selectedAreaValue;
+    }
+
+    // Only add marker if it's in bounds, not already active, and matches view
+    if (
+      bounds.contains(marker.position) &&
+      !activeMarkersArray.includes(marker) &&
+      matchesView
+    ) {
+      marker.map = map;
+      activeMarkersArray.push(marker);
+      addedCount++;
+    }
+  }
+
+  console.log(`Added ${addedCount} marker${addedCount !== 1 ? 's' : ''} back in bounds.`);
+}
+
+function updateMarkerVisibility() {
+  const markers = window.allMarkers;
+  const total = markers?.length || 0;
+  console.log('Total markers to evaluate for visibility:', total);
+  if (total === 0) return;
+
+  const viewType = window.currentViewType;
+  const selectedArea = window.selectedAreaValue?.trim();
+  const activeFilters = window.activeFilters || new Set();
+
+  console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'for viewType:', viewType, 'and selectedArea:', selectedArea);
+  console.log('viewType:', viewType);
+  console.log(selectedArea && selectedArea.toLowerCase() !== 'all'
+    ? `Filtering for viewType ${viewType}: selectedArea ${selectedArea} in updateMarkerVisibility`
+    : 'No area filter applied in updateMarkerVisibility');
+
+  let visibleCount = 0;
+
+  for (const marker of markers) {
+    const metadata = marker.metadata || {};
+    const rawParty = String(metadata.party).trim();
+    const party = rawParty.toUpperCase();
+    const areaValue = metadata[viewType];
+
+    const isStrongVoter = metadata.strong_voter === true || metadata.strong_voter === "true";
+    const isYoungStrongVoter = metadata.young_strong_voter === true || metadata.young_strong_voter === "true";
+    const isInactive = String(metadata.voterstatus).toLowerCase().trim() === "inactive";
+    const isNeedsRide = String(metadata.needs_ride_to_poll).toLowerCase() === "t";
+    const isNotRegistered = rawParty.toLowerCase() === 'not registered';
+
+    const matchesArea =
+      !selectedArea || selectedArea.toLowerCase() === 'all' || areaValue === selectedArea;
+
+    const matchesFilter =
+      (
+        (!activeFilters.has('Strong') || isStrongVoter) &&
+        (!activeFilters.has('YoungStrong') || isYoungStrongVoter) &&
+        (!activeFilters.has('Inactive') || isInactive) &&
+        (!activeFilters.has('NeedsRide') || isNeedsRide) &&
+        (
+          activeFilters.has(party) || // Registered party match
+          (isNotRegistered && activeFilters.has('Not registered')) // Explicit Not Registered match
+        )
+      );
+
+    const shouldBeVisible = matchesArea && matchesFilter;
+
+    //console.log(`Marker ID: ${marker.data?.voterid || 'unknown'}, Party: ${rawParty}, AreaValue: ${areaValue}, MatchesArea: ${matchesArea}, MatchesFilter: ${matchesFilter}, ShouldBeVisible: ${shouldBeVisible}`);
+
+    if (marker.element) {
+      marker.element.style.display = shouldBeVisible ? 'block' : 'none';
+    }
+
+    if (shouldBeVisible) visibleCount++;
+  }
+
+  console.log(`Visible markers: ${visibleCount} of ${total}`);
+}
+
+async function handleViewAndUpdate() {
+  await handleView(); // waits for loadMarkersInBounds to finish
+  console.log('handleView completed, now updating marker visibility at', new Date().toISOString(), 'in handleViewAndUpdate');
+  updateMarkerVisibility(); // runs only after handleView completes
 }
 
 </script>

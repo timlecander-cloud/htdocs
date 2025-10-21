@@ -120,7 +120,7 @@ try {
 	    END || 
 	    COALESCE(p.post_dir || ' ', '') AS address,
             COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-            p.full_township as township, p.voterstatus as voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter, p.young_strong_voter as young_strong_voter, p.needs_ride_to_poll as needs_ride_to_poll
+            p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll
          FROM persons4 p
          WHERE p.latitude BETWEEN \$1 AND \$2
          AND p.longitude BETWEEN \$3 AND \$4
@@ -137,7 +137,7 @@ try {
 	        p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
 	        COALESCE(p.pre_dir || ' ', '') || p.street_name || ' ' || COALESCE(p.street_type, '') || COALESCE(p.post_dir || ' ', '') AS address,
 	        COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-	        p.full_township AS township, p.voterstatus AS voterstatus, p.regn_num as voterid, p.strong_voter as strong_voter, p.young_strong_voter as young_strong_voter, p.needs_ride_to_poll as needs_ride_to_poll
+	        p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll
 	     FROM persons4 p
 	     JOIN addresses a
 	       ON a.addno_full = (
@@ -184,11 +184,14 @@ try {
             'address' => $row['address'],
             'apartment' => $row['apartment'],
             'township' => $row['township'],
+            'precinct' => $row['precinct'] ?? '',
+            'ward' => $row['ward'] ?? '', 
+            'supervisor' => $row['supervisor'] ?? '', 
             'voterstatus' => $row['voterstatus'],
             'voterid' => $row['voterid'],
             'strong_voter' => $row['strong_voter'],
-            'young_strong_voter' => $row['young_strong_voter'], // Added 09-18-25
-            'needs_ride_to_poll' => $row['needs_ride_to_poll'] // Added 09-19-25
+            'young_strong_voter' => $row['young_strong_voter'],
+            'needs_ride_to_poll' => $row['needs_ride_to_poll']
         ];
     }
     pg_free_result($result1);
@@ -215,7 +218,7 @@ try {
 		END ||
 		COALESCE(a.st_posdir || ' ', '') AS address,
 	        COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
-	        a.full_township AS township
+	        a.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor
 	     FROM addresses a
 	     LEFT JOIN persons4 p 
 	       ON a.addno_full = (
@@ -264,11 +267,14 @@ try {
             'address' => $row['address'],
 	        'apartment' => $row['apartment'],
             'township' => $row['township'],
+            'precinct' => $row['precinct'] ?? '',
+            'ward' => $row['ward'] ?? '',
+            'supervisor' => $row['supervisor'] ?? '',
 	        'voterstatus' => '',
 	        'voterid' => $row['oid_'],
 	        'strong_voter' => '',
-            'young_strong_voter' => '', // Added 09-18-25   
-            'needs_ride_to_poll' => '' // Added 09-19-25
+            'young_strong_voter' => '',
+            'needs_ride_to_poll' => ''
         ];
     }
 
