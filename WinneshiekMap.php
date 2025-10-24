@@ -2,6 +2,19 @@
 // Config and globals remain the same
 $GLOBALS['dbConnection'] = null;
 
+require 'db_connection.php'; // Adjust path if needed
+
+$conn = getDbConnection();
+
+$result = pg_query($conn, "SELECT shortname, coordinates FROM precinct_boundaries");
+$boundaries = [];
+while ($row = pg_fetch_assoc($result)) {
+    $boundaries[] = [
+        'name' => $row['name'],
+        'coords' => json_decode($row['coordinates'])
+    ];
+}
+
 // Add viewport-based caching
 class ViewportCache {
   private static $cacheFile = 'viewport_cache.json';
@@ -340,6 +353,7 @@ class ViewportCache {
     window.currentViewType = null; // 'precinct', 'township', etc.
     window.selectedAreaValue = null; // e.g., 'Franklin 1'
 
+    const boundaries = <?php echo json_encode($boundaries); ?>;
 
     // Positions hamburger-btn
     document.getElementById('hamburger-btn').addEventListener('click', function() {
@@ -424,6 +438,7 @@ class ViewportCache {
 
   // Added 07-27-25
   // Initial population
+  window.currentViewType = 'precinct';
   populateAreaOptions('precinct');
 
   async function handleView() {
@@ -903,7 +918,7 @@ class ViewportCache {
       //zoom: 20, // To debug local neighborhood
       //zoom: 8, //Entire MidWest
       //zoom: 16, // about two sq. miles.
-      zoom: 11.8, // Entire Winneshiek County
+      zoom: 11.3, // Entire Winneshiek County
       //center: {lat: 43.38024, lng: -91.85018} // Compound
       //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
       center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
@@ -912,7 +927,19 @@ class ViewportCache {
       mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
     });
 
-    console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
+    //console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
+
+    boundaries.forEach(b => {
+      const polygon = new google.maps.Polygon({
+        paths: b.coords.map(c => ({ lat: c[0], lng: c[1] })),
+        strokeColor: "#0000FF",
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: "#0000FF",
+        fillOpacity: 0.15,
+        map: map,
+      });
+    });
       
     initFilters();
 
@@ -1060,6 +1087,7 @@ class ViewportCache {
 
       // Update global view type
       window.currentViewType = selectedView;
+      console.log('Current view type set to:', window.currentViewType);
 
       // Update selected area value after repopulating options
       const areaSelector = document.getElementById('areaSelector');
@@ -1095,53 +1123,7 @@ class ViewportCache {
       rectangle: ${rectangleOverlay ? 'active' : 'none'}<br>
     `;
   }
-
-  // function onFilterCheckboxChange(filterKey, isChecked) {
-  //   const wasSelected = selectedParties[filterKey] === true;
-  //   const wasLoaded = loadedParties[filterKey] === true;
-
-  //   if (isChecked && !wasLoaded) {
-  //     loadedParties[filterKey] = true;
-  //     selectedParties[filterKey] = true;
-  //     console.log('calling handleView for first-time load of', filterKey);
-  //     handleView(filterKey);
-  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
-  //   } else if (isChecked && wasLoaded && !wasSelected) {
-  //     selectedParties[filterKey] = true;
-  //     //setFilterVisibility(filterKey, true);
-  //     console.log('calling updateMarkerVisibilityEfficient for re-selection of point 1', filterKey);
-  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
-  //   } else if (!isChecked && wasSelected) {
-  //     selectedParties[filterKey] = false;
-  //     //setFilterVisibility(filterKey, false);
-  //     console.log('calling updateMarkerVisibilityEfficient for de-selection of point 2', filterKey);
-  //     updateMarkerVisibilityEfficient(); // Experimental. 10-18-25 07:00am
-  //   }
-  // }
-
-  // function setFilterVisibility(filterKey, isVisible) {
-  //   // 10-18-25 07-13 I think only one value is present in filterKey at a time. This doesn't do much good.
-  //   console.log('setFilterVisibility called for filterKey:', filterKey, 'isVisible:', isVisible);
-  //   for (const [id, marker] of markerCache.entries()) {
-  //     //console.log('setFilterVisibility: Checking marker id:', id, 'for filterKey:', filterKey);
-  //     const data = marker.data;
-  //     if (!data || !marker.element) continue;
-
-  //     //console.log('Marker data for id:', id, data);
-
-  //     const matches =
-  //       data.party === filterKey ||
-  //       data.strong_voter === true && filterKey === 'Strong' ||
-  //       data.young_strong_voter === true && filterKey === 'YoungStrong' ||
-  //       data.inactive === true && filterKey === 'Inactive' ||
-  //       data.needs_ride === true && filterKey === 'NeedsRide';
-
-  //     if (matches) {
-  //       marker.element.style.display = isVisible ? 'block' : 'none';
-  //     }
-  //   }
-  // }
-
+  
   function logAllMarkersInCache() {
   console.log('🔍 Dumping markerCache contents:');
 
@@ -1225,20 +1207,80 @@ function addInBoundsAdvancedMarkers(map, markerCache, activeMarkersArray) {
   console.log(`Added ${addedCount} marker${addedCount !== 1 ? 's' : ''} back in bounds.`);
 }
 
+// function updateMarkerVisibility() {
+//   const markers = window.allMarkers;
+//   const total = markers?.length || 0;
+//   console.log('Total markers to evaluate for visibility:', total);
+//   if (total === 0) return;
+
+//   const viewType = window.currentViewType;
+//   const selectedArea = window.selectedAreaValue?.trim();
+//   const activeFilters = window.activeFilters || new Set();
+
+//   console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'for viewType:', viewType, 'and selectedArea:', selectedArea);
+//   console.log('viewType:', viewType);
+//   console.log(selectedArea && selectedArea.toLowerCase() !== 'all'
+//     ? `Filtering for viewType ${viewType}: selectedArea ${selectedArea} in updateMarkerVisibility`
+//     : 'No area filter applied in updateMarkerVisibility');
+
+//   let visibleCount = 0;
+
+//   console.log('selectedArea:', selectedArea);
+  
+//   for (const marker of markers) {
+//     const metadata = marker.metadata || {};
+//     const rawParty = String(metadata.party).trim();
+//     const party = rawParty.toUpperCase();
+//     const areaValue = metadata[viewType];
+
+//     const isStrongVoter = metadata.strong_voter === true || metadata.strong_voter === "true";
+//     const isYoungStrongVoter = metadata.young_strong_voter === true || metadata.young_strong_voter === "true";
+//     const isInactive = String(metadata.voterstatus).toLowerCase().trim() === "inactive";
+//     const isNeedsRide = String(metadata.needs_ride_to_poll).toLowerCase() === "t";
+//     const isNotRegistered = rawParty.toLowerCase() === 'not registered';
+
+//     const matchesArea =
+//       !selectedArea || selectedArea.toLowerCase() === 'all' || areaValue === selectedArea;
+
+//     const matchesFilter =
+//       (
+//         (!activeFilters.has('Strong') || isStrongVoter) &&
+//         (!activeFilters.has('YoungStrong') || isYoungStrongVoter) &&
+//         (!activeFilters.has('Inactive') || isInactive) &&
+//         (!activeFilters.has('NeedsRide') || isNeedsRide) &&
+//         (
+//           activeFilters.has(party) || // Registered party match
+//           (isNotRegistered && activeFilters.has('Not registered')) // Explicit Not Registered match
+//         )
+//       );
+
+//     const shouldBeVisible = matchesArea && matchesFilter;
+
+//     //console.log(`Marker ID: ${marker.data?.voterid || 'unknown'}, Party: ${rawParty}, AreaValue: ${areaValue}, MatchesArea: ${matchesArea}, MatchesFilter: ${matchesFilter}, ShouldBeVisible: ${shouldBeVisible}`);
+   
+//     if (marker.element) {
+//       marker.element.style.display = shouldBeVisible ? 'block' : 'none';
+//     }
+
+//     if (shouldBeVisible) visibleCount++;
+//   }
+
+//   console.log(`Visible markers: ${visibleCount} of ${total}`);
+// }
+
 function updateMarkerVisibility() {
   const markers = window.allMarkers;
   const total = markers?.length || 0;
-  console.log('Total markers to evaluate for visibility:', total);
+  //console.log('Total markers to evaluate for visibility:', total);
   if (total === 0) return;
 
-  const viewType = window.currentViewType;
+  const viewType = window.currentViewType?.trim();
   const selectedArea = window.selectedAreaValue?.trim();
   const activeFilters = window.activeFilters || new Set();
 
-  console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'for viewType:', viewType, 'and selectedArea:', selectedArea);
-  console.log('viewType:', viewType);
+  console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'and selectedArea:', selectedArea, 'for viewType:', viewType);
   console.log(selectedArea && selectedArea.toLowerCase() !== 'all'
-    ? `Filtering for viewType ${viewType}: selectedArea ${selectedArea} in updateMarkerVisibility`
+    ? `Filtering for selectedArea: ${selectedArea} in updateMarkerVisibility`
     : 'No area filter applied in updateMarkerVisibility');
 
   let visibleCount = 0;
@@ -1247,7 +1289,6 @@ function updateMarkerVisibility() {
     const metadata = marker.metadata || {};
     const rawParty = String(metadata.party).trim();
     const party = rawParty.toUpperCase();
-    const areaValue = metadata[viewType];
 
     const isStrongVoter = metadata.strong_voter === true || metadata.strong_voter === "true";
     const isYoungStrongVoter = metadata.young_strong_voter === true || metadata.young_strong_voter === "true";
@@ -1255,8 +1296,38 @@ function updateMarkerVisibility() {
     const isNeedsRide = String(metadata.needs_ride_to_poll).toLowerCase() === "t";
     const isNotRegistered = rawParty.toLowerCase() === 'not registered';
 
-    const matchesArea =
-      !selectedArea || selectedArea.toLowerCase() === 'all' || areaValue === selectedArea;
+    // Match if no area selected, or 'all', or if any metadata value matches selectedArea
+    // const matchesArea =
+    //   !selectedArea ||
+    //   selectedArea.toLowerCase() === 'all' ||
+    //   Object.values(metadata).some(val => String(val).trim() === selectedArea);
+    //console.log('Raw currentViewType:', window.currentViewType);
+    //const viewType = window.currentViewType?.trim();
+    let matchesArea = false;
+
+    //console.log('Evaluating area match for viewType:', viewType, 'selectedArea:', selectedArea);
+    //console.log('Marker metadata for area matching:', metadata);
+    switch (viewType) {
+      case 'precinct':
+        matchesArea = String(metadata.precinct).trim().toLowerCase() === selectedArea?.toLowerCase();
+        //console.log('Precinct match:', matchesArea);
+        break;
+
+      case 'township':
+        matchesArea = String(metadata.township).trim().toLowerCase() === selectedArea?.toLowerCase();
+        break;
+
+      case 'ward':
+        matchesArea = String(metadata.ward).trim().toLowerCase() === selectedArea?.toLowerCase();
+        break;
+
+      case 'supervisor':
+        matchesArea = String(metadata.supervisor).trim().toLowerCase() === selectedArea?.toLowerCase();
+        break;
+
+      default:
+        matchesArea = !selectedArea || selectedArea.toLowerCase() === 'all';
+    }
 
     const matchesFilter =
       (
@@ -1265,24 +1336,27 @@ function updateMarkerVisibility() {
         (!activeFilters.has('Inactive') || isInactive) &&
         (!activeFilters.has('NeedsRide') || isNeedsRide) &&
         (
-          activeFilters.has(party) || // Registered party match
-          (isNotRegistered && activeFilters.has('Not registered')) // Explicit Not Registered match
+          activeFilters.has(party) ||
+          (isNotRegistered && activeFilters.has('Not registered'))
         )
       );
 
     const shouldBeVisible = matchesArea && matchesFilter;
 
-    //console.log(`Marker ID: ${marker.data?.voterid || 'unknown'}, Party: ${rawParty}, AreaValue: ${areaValue}, MatchesArea: ${matchesArea}, MatchesFilter: ${matchesFilter}, ShouldBeVisible: ${shouldBeVisible}`);
-
     if (marker.element) {
       marker.element.style.display = shouldBeVisible ? 'block' : 'none';
     }
 
-    if (shouldBeVisible) visibleCount++;
+    //if (shouldBeVisible) visibleCount++;
+    if (shouldBeVisible) {
+      visibleCount++;
+      //console.log(`Visible marker ID: ${marker.data?.voterid || 'unknown'}`, 'Metadata:', metadata);
+    }
   }
 
   console.log(`Visible markers: ${visibleCount} of ${total}`);
 }
+
 
 async function handleViewAndUpdate() {
   await handleView(); // waits for loadMarkersInBounds to finish
