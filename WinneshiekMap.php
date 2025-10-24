@@ -10,7 +10,7 @@ $result = pg_query($conn, "SELECT shortname, coordinates FROM precinct_boundarie
 $boundaries = [];
 while ($row = pg_fetch_assoc($result)) {
     $boundaries[] = [
-        'name' => $row['name'],
+        'name' => $row['shortname'],
         'coords' => json_decode($row['coordinates'])
     ];
 }
@@ -229,12 +229,14 @@ class ViewportCache {
     pointer-events: none;
   }
 </style>
-<!-- Load Google Maps JavaScript API -->
+<!-- Load Google Maps JavaScript API (not) relocated at bottom of body 10-24-25 -->
  <!--
 <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC_KbKXsaVsdkaOvEHWYfP0Gn1lBGB-eRU&loading=async&callback=initMap&libraries=marker,drawing" loading="async">
 -->
 <!-- </script> -->
+<!--
 <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC_KbKXsaVsdkaOvEHWYfP0Gn1lBGB-eRU&loading=async&callback=initMap"></script>
+-->
 
 </head>
 <body>
@@ -899,7 +901,10 @@ class ViewportCache {
     }
   }
 
-  async function initMap() {
+  //async function initMap() {
+  window.initMap = function() {
+    (async () => {
+    console.log('initMap called at', new Date().toISOString());
     // First import the libraries
     const { Map } = await google.maps.importLibrary("maps");
     
@@ -1055,6 +1060,7 @@ class ViewportCache {
       }
     });
     //console.log('Google Maps API version:', google.maps.version); // 10-05-25 Google Maps API version: 3.62.8d
+    })();
   } // End of initMap
 
   // Add this after your map initialization
@@ -1303,30 +1309,32 @@ function updateMarkerVisibility() {
     //   Object.values(metadata).some(val => String(val).trim() === selectedArea);
     //console.log('Raw currentViewType:', window.currentViewType);
     //const viewType = window.currentViewType?.trim();
+
     let matchesArea = false;
 
-    //console.log('Evaluating area match for viewType:', viewType, 'selectedArea:', selectedArea);
-    //console.log('Marker metadata for area matching:', metadata);
-    switch (viewType) {
-      case 'precinct':
-        matchesArea = String(metadata.precinct).trim().toLowerCase() === selectedArea?.toLowerCase();
-        //console.log('Precinct match:', matchesArea);
-        break;
+    if (!selectedArea || selectedArea.toLowerCase() === 'all') {
+      matchesArea = true;
+    } else {
+      switch (viewType) {
+        case 'precinct':
+          matchesArea = String(metadata.precinct).trim().toLowerCase() === selectedArea.toLowerCase();
+          break;
 
-      case 'township':
-        matchesArea = String(metadata.township).trim().toLowerCase() === selectedArea?.toLowerCase();
-        break;
+        case 'township':
+          matchesArea = String(metadata.township).trim().toLowerCase() === selectedArea.toLowerCase();
+          break;
 
-      case 'ward':
-        matchesArea = String(metadata.ward).trim().toLowerCase() === selectedArea?.toLowerCase();
-        break;
+        case 'ward':
+          matchesArea = String(metadata.ward).trim().toLowerCase() === selectedArea.toLowerCase();
+          break;
 
-      case 'supervisor':
-        matchesArea = String(metadata.supervisor).trim().toLowerCase() === selectedArea?.toLowerCase();
-        break;
+        case 'supervisor':
+          matchesArea = String(metadata.supervisor).trim().toLowerCase() === selectedArea.toLowerCase();
+          break;
 
-      default:
-        matchesArea = !selectedArea || selectedArea.toLowerCase() === 'all';
+        default:
+          matchesArea = false;
+      }
     }
 
     const matchesFilter =
@@ -1365,6 +1373,6 @@ async function handleViewAndUpdate() {
 }
 
 </script>
-
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC_KbKXsaVsdkaOvEHWYfP0Gn1lBGB-eRU&loading=async&callback=initMap"></script>
 </body>
 </html>
