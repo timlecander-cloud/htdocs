@@ -259,7 +259,7 @@ try {
 		END ||
 		COALESCE(a.st_posdir || ' ', '') AS address,
 	        COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
-	        a.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor
+	        a.full_township AS township, a.precinct AS precinct, a.city_council_ward AS ward, a.county_supervisor AS supervisor
 	     FROM addresses a
             LEFT JOIN persons4 p 
             ON a.addno_full = (

@@ -1240,7 +1240,7 @@ function updateMarkerVisibility() {
   const selectedArea = window.selectedAreaValue?.trim();
   const activeFilters = window.activeFilters || new Set();
 
-  //console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'and selectedArea:', selectedArea, 'for viewType:', viewType);
+  //console.log('Updating marker visibility with active filters:', Array.from(activeFilters), 'and selectedArea:', selectedArea, 'for viewType:', viewType); // Updating marker visibility with active filters: ['Not registered']0: "Not registered"length: 1[[Prototype]]: Array(0) and selectedArea: 7 for viewType: precinct
   //console.log(selectedArea && selectedArea.toLowerCase() !== 'all'
   //  ? `Filtering for selectedArea: ${selectedArea} in updateMarkerVisibility`
   //  : 'No area filter applied in updateMarkerVisibility');
@@ -1308,6 +1308,7 @@ function updateMarkerVisibility() {
       );
 
     const shouldBeVisible = matchesArea && matchesFilter;
+    //console.log(`Marker ID: ${marker.data?.voterid || 'unknown'}`, 'Matches Area:', matchesArea, 'Matches Filter:', matchesFilter, 'Should be visible:', shouldBeVisible, 'Metadata:', metadata);
 
     if (marker.element) {
       marker.element.style.display = shouldBeVisible ? 'block' : 'none';
