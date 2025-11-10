@@ -2,19 +2,6 @@
 // Config and globals remain the same
 $GLOBALS['dbConnection'] = null;
 
-require 'db_connection.php'; // Adjust path if needed
-
-$conn = getDbConnection();
-
-$result = pg_query($conn, "SELECT shortname, coordinates FROM precinct_boundaries");
-$boundaries = [];
-while ($row = pg_fetch_assoc($result)) {
-    $boundaries[] = [
-        'name' => $row['shortname'],
-        'coords' => json_decode($row['coordinates'])
-    ];
-}
-
 // Add viewport-based caching
 class ViewportCache {
   private static $cacheFile = 'viewport_cache.json';
@@ -285,7 +272,12 @@ class ViewportCache {
 
     <div class="needs-ride-filter">
       <label><input type="checkbox" value="NeedsRide" id="filter-needs-ride"> Needs Ride to Poll</label>
-    </div>  
+    </div>
+    
+    <div class="Township Trustee or Clerk">
+      <label><input type="checkbox" value="TrusteeClerk" id="filter-trustee-clerk"> Township Trustee or Clerk</label>
+    </div>
+
   <!--<button id="drawRectangleBtn">Draw Rectangle</button>-->
   <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button>
 
@@ -346,12 +338,9 @@ class ViewportCache {
 
   <script>
     // Declare global filter sets near the top of your script
-    //window.visibleParties = new Set();
     window.activeFilters = new Set(); // includes DEM, REP, Strong, YoungStrong, etc.
     window.currentViewType = null; // 'precinct', 'township', etc.
     window.selectedAreaValue = null; // e.g., 'Franklin 1'
-
-    const boundaries = <?php echo json_encode($boundaries); ?>;
 
     // Positions hamburger-btn
     document.getElementById('hamburger-btn').addEventListener('click', function() {
@@ -361,7 +350,7 @@ class ViewportCache {
     });
   
   
-  window.allMarkers = []; // instead of markers = []
+  window.allMarkers = [];
 
   const markerCache = new Map(); // voterId → marker
 
@@ -374,6 +363,8 @@ class ViewportCache {
   let isDrawing = false;
   let startLatLng = null;
   let rectangleOverlay = null;
+
+  let drawnPolygons = [];
 
   // For smart toggling of visibility for markers.
   const selectedParties = {
@@ -438,6 +429,7 @@ class ViewportCache {
   // Initial population
   window.currentViewType = 'precinct';
   populateAreaOptions('precinct');
+  drawPolygons('precinct');
 
   async function handleView() {
   const currentView = document.getElementById('viewSelector').value;
@@ -471,12 +463,12 @@ class ViewportCache {
         break;
 
       case 'ward':
-        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in ward');
+        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in ward');
         await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'supervisor':
-        console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in supervisor');
+        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in supervisor');
         await loadMarkersInBounds(currentView, selectedArea);
         break;    
 
@@ -484,7 +476,74 @@ class ViewportCache {
         console.warn("Unknown view:", currentView);
         return;
     }
+
+    drawPolygons(currentView);
   }
+
+  function drawPolygons(viewType) {
+    // Clear any previously drawn polygons
+    drawnPolygons.forEach(polygon => polygon.setMap(null));
+    drawnPolygons = [];
+
+    // Define stroke/fill styles per view
+    const viewStyles = {
+      township: { strokeColor: '#0000FF', fillColor: '#0000FF' },
+      precinct: { strokeColor: '#0000FF', fillColor: '#0000FF' },
+      //precinct: { strokeColor: '#c3c3e9ff', fillColor: '#c3c3e9ff' }
+    };
+
+    // Only draw if viewType is supported
+    if (!['township', 'precinct'].includes(viewType)) {
+      //console.log(`${viewType.charAt(0).toUpperCase() + viewType.slice(1)} view selected (no polygons to draw)`);
+      return;
+    }
+
+    //console.log(`${viewType.charAt(0).toUpperCase() + viewType.slice(1)} view selected`);
+
+    fetch(`get_boundaries.php?type=${viewType}`)
+      .then(response => response.json())
+      .then(geojson => {
+        geojson.features.forEach(feature => {
+          const geom = feature.geometry;
+          if (!geom || !geom.coordinates) {
+            console.warn('Missing geometry:', feature);
+            return;
+          }
+
+          let rings = [];
+
+          if (geom.type === 'Polygon') {
+            rings = geom.coordinates;
+          } else if (geom.type === 'MultiPolygon') {
+            rings = geom.coordinates.flat();
+          } else {
+            console.warn('Unsupported geometry type:', geom.type);
+            return;
+          }
+
+          rings.forEach(ring => {
+            const path = ring.map(coord => ({
+              lat: coord[1], // GeoJSON: [lng, lat] → Google Maps: {lat, lng}
+              lng: coord[0]
+            }));
+
+            const polygon = new google.maps.Polygon({
+              paths: path,
+              strokeColor: viewStyles[viewType].strokeColor,
+              strokeOpacity: 0.8,
+              strokeWeight: 2,
+              fillColor: viewStyles[viewType].fillColor,
+              fillOpacity: 0.35
+            });
+
+            polygon.setMap(map);
+            drawnPolygons.push(polygon);
+          });
+        });
+      })
+      .catch(error => console.error(`Error loading ${viewType} boundaries:`, error));
+  }
+
 
   // In your main HTML file
   async function loadMarkersInBounds(view, area) {
@@ -576,25 +635,16 @@ class ViewportCache {
           let voterAptArray = []; // Local array for apartment info
           const markerData = group[0];
 
-          // 11-03-25 Following seems to be deadends. Duplicate const's further down in function.
-          // const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(markerData.party);
-          // const isInactive = markerData.voterstatus && markerData.voterstatus.toLowerCase().trim() === 'inactive';
-          // const isStrongVoter = markerData.strong_voter === true || markerData.strong_voter === "true";
-          // const isYoungStrongVoter = markerData.young_strong_voter === true || markerData.young_strong_voter === "true";
-          // const isNeedsRide = String(markerData.needs_ride_to_poll).toLowerCase() === "t"; // PostgreSQL 't' for true
-
-          //const groupHasStrongVoter = group.some(m => m.strong_voter === true || m.strong_voter === "true");
-          //const groupHasStrongVoterCount = group.filter(m => m.strong_voter === true || m.strong_voter === "true").length;
           const groupHasStrongVoter = group.some(m => String(m.strong_voter).toLowerCase() === "t");
           const groupHasStrongVoterCount = group.filter(m => String(m.strong_voter).toLowerCase() === "t").length;
-          //const groupHasYoungStrongVoter = group.some(m => m.young_strong_voter === true || m.young_strong_voter === "true");
-          //const groupHasYoungStrongVoterCount = group.filter(m => m.young_strong_voter === true || m.young_strong_voter === "true").length;
           const groupHasYoungStrongVoter = group.some(m => String(m.young_strong_voter).toLowerCase() === "t");
           const groupHasYoungStrongVoterCount = group.filter(m => String(m.young_strong_voter).toLowerCase() === "t").length;
           const groupHasInactive = group.some(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive');
           const groupHasInactiveCount = group.filter(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive').length;
           const groupHasNeedsRide = group.some(m => String(m.needs_ride_to_poll).toLowerCase() === "t");
+          const groupHasTrusteeClerk = group.some(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't');
           const groupHasNeedsRideCount = group.filter(m => String(m.needs_ride_to_poll).toLowerCase() === "t").length;
+          const groupHasTrusteeClerkCount = group.filter(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't').length;
 
           let shouldInclude;
 
@@ -603,50 +653,12 @@ class ViewportCache {
 
         // ✅ Apply full filter stack for registered voters
         for (const m of group) {
-          // 11-03-25 Create markers regardless of filters. Depend on updateMarkerVisibility to show/hide.
-          // const isValidParty = ['DEM', 'REP', 'NP', 'OTH'].includes(String(m.party).toUpperCase()); // << Changed
-          // const isNotRegistered = m.party.toLowerCase() === 'not registered';
-          // const isInactive = m.voterstatus?.toLowerCase().trim() === 'inactive';
-          // const isStrongVoter = m.strong_voter === true || m.strong_voter === "true";
-          // const isYoungStrongVoter = m.young_strong_voter === true || m.young_strong_voter === "true";
-          // const isNeedsRide = String(m.needs_ride_to_poll).toLowerCase() === "t";
-
-          // shouldInclude =
-          //   (
-          //     isValidParty &&
-          //     (
-          //       window.activeFilters.has(m.party) ||
-          //       (isStrongVoter && window.activeFilters.has('Strong')) ||
-          //       (isYoungStrongVoter && window.activeFilters.has('YoungStrong')) ||
-          //       (isInactive && window.activeFilters.has('Inactive')) ||
-          //       (isNeedsRide && window.activeFilters.has('NeedsRide'))
-          //     )
-          //   ) ||
-          //   (
-          //     isNotRegistered && window.activeFilters.has('Not registered')
-          //   );                
-
-          //   if (shouldInclude && m.voterid) {
-          //     voterIdArray.push(m.voterid);
-          //     voterAptArray.push(m.apartment);
-          //   }
-
             voterIdArray.push(m.voterid);
             voterAptArray.push(m.apartment);
           } // End for m of group
 
           const labelText = `${voterIdArray.length} voters\n`;
           const address = group[0]?.address || 'Unknown address';
-          // const namesList = group
-          //   .filter(m => voterIdArray.includes(m.voterid)) // ✅ Only include matching voter IDs
-          //   .map(m => {
-          //     if (m.party === 'Not registered') {
-          //       return `(Not registered) ${m.apartment}`;
-          //     } else {
-          //       return `${m.first_name} ${m.last_name} ${m.apartment} (${m.party})`;
-          //     }
-          //   })
-          //   .join('\r\n');
 
           const namesList = group
             .map(m => {
@@ -660,7 +672,7 @@ class ViewportCache {
 
             //console.log('Creating marker for address:', address, 'with voters:\n', namesList);
 
-            // If voterIdArray is > 10, use circle with count label. Otherwise, use offset markers.
+          // If voterIdArray is > 10, use circle with count label. Otherwise, use offset markers.
           if (voterIdArray.length > 10) {
             if (!markerCache.has(voterIdArray[1])) {
               const container = document.createElement('div');
@@ -732,7 +744,8 @@ class ViewportCache {
                 strong_voter: markerData.strong_voter,
                 young_strong_voter: markerData.young_strong_voter,
                 voterstatus: markerData.voterstatus,
-                needs_ride_to_poll: markerData.needs_ride_to_poll
+                needs_ride_to_poll: markerData.needs_ride_to_poll,
+                township_trustee_or_clerk: markerData.township_trustee_or_clerk
               };                      
 
               attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
@@ -797,7 +810,8 @@ class ViewportCache {
                       strong_voter: markerData.strong_voter,
                       young_strong_voter: markerData.young_strong_voter,
                       voterstatus: markerData.voterstatus,
-                      needs_ride_to_poll: markerData.needs_ride_to_poll
+                      needs_ride_to_poll: markerData.needs_ride_to_poll,
+                      township_trustee_or_clerk: markerData.township_trustee_or_clerk
                     };                      
 
                     attachClusteredMarkerClick(marker, voterIdArray, address, voterAptArray, map, infoWindow);
@@ -860,6 +874,7 @@ class ViewportCache {
           //const youngStrong = voter.young_strong_voter ? 'Yes' : 'No';
           const youngStrong = voter.young_strong_voter === 't' ? 'Yes' : 'No';
           const needsRide = voter.needs_ride_to_poll === 't' ? 'Yes' : 'No';
+          const trusteeClerk = voter.township_trustee_or_clerk === 't' ? 'Yes' : 'No';
 
           return `
             <div style="margin-bottom: 8px;">
@@ -870,7 +885,8 @@ class ViewportCache {
               History: ${history}<br>
               Strong Voter: ${strong}<br>
               Young Strong Voter: ${youngStrong}<br>
-              Needs ride to poll: ${needsRide}
+              Needs ride to poll: ${needsRide}<br>
+              Township Trustee or Clerk: ${trusteeClerk}
             </div>
           `;
         }).join('<hr>');
@@ -918,7 +934,6 @@ class ViewportCache {
     }
   }
 
-  //async function initMap() {
   window.initMap = function() {
     (async () => {
     //console.log('initMap called at', new Date().toISOString());
@@ -951,18 +966,6 @@ class ViewportCache {
 
     //console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
 
-    boundaries.forEach(b => {
-      const polygon = new google.maps.Polygon({
-        paths: b.coords.map(c => ({ lat: c[0], lng: c[1] })),
-        strokeColor: "#0000FF",
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: "#0000FF",
-        fillOpacity: 0.15,
-        map: map,
-      });
-    });
-      
     initFilters();
 
     // Optionally enable map movement logic *after* filters are active
@@ -1107,6 +1110,7 @@ class ViewportCache {
     document.getElementById('viewSelector').addEventListener('change', function (e) {
       const selectedView = this.value;
       populateAreaOptions(selectedView);
+      drawPolygons(selectedView);
 
       // Update global view type
       window.currentViewType = selectedView;
@@ -1252,12 +1256,11 @@ function updateMarkerVisibility() {
     const rawParty = String(metadata.party).trim();
     const party = rawParty.toUpperCase();
 
-    //const isStrongVoter = metadata.strong_voter === true || metadata.strong_voter === "true";
     const isStrongVoter = String(metadata.strong_voter).toLowerCase() === "t";
-    //const isYoungStrongVoter = metadata.young_strong_voter === true || metadata.young_strong_voter === "true";
     const isYoungStrongVoter = String(metadata.young_strong_voter).toLowerCase() === "t";
     const isInactive = String(metadata.voterstatus).toLowerCase().trim() === "inactive";
     const isNeedsRide = String(metadata.needs_ride_to_poll).toLowerCase() === "t";
+    const isTrusteeClerk = String(metadata.township_trustee_or_clerk).toLowerCase() === "t";
     const isNotRegistered = rawParty.toLowerCase() === 'not registered';
 
     // Match if no area selected, or 'all', or if any metadata value matches selectedArea
@@ -1301,6 +1304,7 @@ function updateMarkerVisibility() {
         (!activeFilters.has('YoungStrong') || isYoungStrongVoter) &&
         (!activeFilters.has('Inactive') || isInactive) &&
         (!activeFilters.has('NeedsRide') || isNeedsRide) &&
+        (!activeFilters.has('TrusteeClerk') || isTrusteeClerk) &&
         (
           activeFilters.has(party) ||
           (isNotRegistered && activeFilters.has('Not registered'))

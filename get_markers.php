@@ -103,7 +103,6 @@ try {
 
     pg_query_params($conn, $queryLog, $paramsLog);
 
-
     $params1 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgPartyArray, $areaString];
 
     $query1 = sprintf(
@@ -120,7 +119,7 @@ try {
 	    END || 
 	    COALESCE(p.post_dir || ' ', '') AS address,
             COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-            p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll
+            p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk
          FROM persons4 p
          WHERE p.latitude BETWEEN \$1 AND \$2
          AND p.longitude BETWEEN \$3 AND \$4
@@ -137,7 +136,7 @@ try {
 	        p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
 	        COALESCE(p.pre_dir || ' ', '') || p.street_name || ' ' || COALESCE(p.street_type, '') || COALESCE(p.post_dir || ' ', '') AS address,
 	        COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-	        p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll
+	        p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk
 	     FROM persons4 p
 	     JOIN addresses a
 	       ON a.addno_full = (
@@ -191,7 +190,8 @@ try {
             'voterid' => $row['voterid'],
             'strong_voter' => $row['strong_voter'],
             'young_strong_voter' => $row['young_strong_voter'],
-            'needs_ride_to_poll' => $row['needs_ride_to_poll']
+            'needs_ride_to_poll' => $row['needs_ride_to_poll'],
+            'township_trustee_or_clerk' => $row['township_trustee_or_clerk']
         ];
     }
     pg_free_result($result1);
@@ -199,51 +199,7 @@ try {
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgTownshipArray];
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $areaString];
 
-    // Added 07-07-25 to suppress when Not Registered is not selected
     if (in_array('Not registered', $parties)) {
-
-    // Modified 06-22-25 to address interpretation of 'all'	
-	// Added IncludeNeighborhoods
-	// $query2 = sprintf(
-	//     "SELECT a.latitude, a.longitude, a.oid_,
-	//         a.addno_full || ' ' || 
-	// 	COALESCE(a.st_predir || ' ', '') || 
-	// 	a.st_name || ' ' || 
-	// 	COALESCE(a.st_postyp, '') ||
-	// 	CASE
-	// 	  WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
-	// 	       AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
-	// 	  THEN ' '
-	// 	  ELSE ''
-	// 	END ||
-	// 	COALESCE(a.st_posdir || ' ', '') AS address,
-	//         COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
-	//         a.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor
-	//      FROM addresses a
-	//      LEFT JOIN persons4 p 
-	//        ON a.addno_full = (
-	//            p.house_num || COALESCE(
-	//                CASE WHEN NULLIF(p.house_suffix, '') IS NOT NULL THEN
-	//                    ' ' || p.house_suffix
-	//                ELSE ''
-	//                END,
-	//                ''
-	//            )
-	//        )
-	//        AND a.st_name = TRIM(p.street_name)
-	//        AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
-	//        AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
-	//        AND (p.unit_num IS NULL OR p.unit_num = '' OR a.unit_num = p.unit_num)
-	//        AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
-	//      WHERE p.house_num IS NULL
-	//        AND a.latitude BETWEEN \$1 AND \$2 
-	//        AND a.longitude BETWEEN \$3 AND \$4 
-	//        AND a.latitude IS NOT NULL 
-	//        AND a.longitude IS NOT NULL
-	//        AND (\$5 = '' OR \$5 = 'all' OR a.%s = ANY(string_to_array(\$5, ',')))
-	//        AND (a.non_residence_entity IS NULL OR TRIM(a.non_residence_entity) = '')",
-	//     pg_escape_identifier($conn, $target_field)
-	// );
 
 	$query2 = sprintf(
 	    "SELECT a.latitude, a.longitude, a.oid_,
@@ -318,13 +274,13 @@ try {
 	        'voterid' => $row['oid_'],
 	        'strong_voter' => '',
             'young_strong_voter' => '',
-            'needs_ride_to_poll' => ''
+            'needs_ride_to_poll' => '',
+            'township_trustee_or_clerk' => ''
         ];
     }
 
     pg_free_result($result2);
     
-    // Added 07-07-25 for query whether Not Registered was checked.
     }
 
     echo json_encode([
