@@ -49,38 +49,54 @@ class ViewportCache {
     <title>Winneshiek County</title>
 <style>
   html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
   }
 
   #hamburger-btn {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 9999;
-      background: #333;
-      color: white;
-      padding: 10px;
-      border: none;
-      cursor: pointer;
-      border-radius: 5px;
-      font-size: 36px;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 9999;
+    background: #333;
+    color: white;
+    padding: 10px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 36px;
   }
 
   #filter-panel {
-      position: fixed;
-      top: 50px;
-      left: 10px;
-      background: white;
-      padding: 15px;
-      border: 1px solid #ccc;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      display: none; /* Hidden by default */
-      z-index: 10000;
-      max-height: 80vh; /* Prevent it from covering the whole screen */
-      overflow-y: auto; /* Scroll if content is too long */
-      width: 800px; /* Keep it small so the map remains visible */
+    position: fixed;
+    top: 50px;
+    left: 10px;
+    background: white;
+    padding: 15px;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    display: none; /* Hidden by default */
+    z-index: 10000;
+    max-height: 80vh; /* Prevent it from covering the whole screen */
+    overflow-y: auto; /* Scroll if content is too long */
+    width: 800px; /* Keep it small so the map remains visible */
+  }
+
+  #loading-message {
+    position: absolute;
+    bottom: 5px;       /* anchor to bottom */
+    right: 8px;        /* anchor to right */
+    text-align: right; /* right-justify text */
+    font-size: 48px;   /* 4x bigger than 12px */
+    color: #ffcc00;    /* highlight color */
+    display: none;     /* hidden by default */
+    animation: flash 1s infinite; /* flashing animation */
+  }
+
+  @keyframes flash {
+    0%, 50%, 100% { opacity: 1; }
+    25%, 75% { opacity: 0; }
   }
 
   #viewSelector,
@@ -278,9 +294,11 @@ class ViewportCache {
       <label><input type="checkbox" value="TrusteeClerk" id="filter-trustee-clerk"> Township Trustee or Clerk</label>
     </div>
 
-  <!--<button id="drawRectangleBtn">Draw Rectangle</button>-->
-  <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button>
+    <!--<button id="drawRectangleBtn">Draw Rectangle</button>-->
+    <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button>
 
+    <!-- Loading message element -->
+    <div id="loading-message">⏳ Loading markers...</div>
   </div> <!-- end of filter-panel -->
 
   <div id="drawTooltip" style="
@@ -427,9 +445,10 @@ class ViewportCache {
 
   // Added 07-27-25
   // Initial population
-  window.currentViewType = 'precinct';
-  populateAreaOptions('precinct');
-  drawPolygons('precinct');
+  // Moved to initMap 11-11-25
+  // window.currentViewType = 'precinct';
+  // populateAreaOptions('precinct');
+  // drawPolygons('precinct');
 
   async function handleView() {
   const currentView = document.getElementById('viewSelector').value;
@@ -444,7 +463,6 @@ class ViewportCache {
           return;
         }
 
-        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in township');
         await loadMarkersInBounds(currentView, selectedArea);
         break;
 
@@ -458,17 +476,14 @@ class ViewportCache {
           return;
         }
         // handle precinct logic here
-        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in precinct');        
         await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'ward':
-        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in ward');
         await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'supervisor':
-        //console.log('loadMarkersInBounds called at', new Date().toISOString(), 'in supervisor');
         await loadMarkersInBounds(currentView, selectedArea);
         break;    
 
@@ -547,7 +562,7 @@ class ViewportCache {
 
   // In your main HTML file
   async function loadMarkersInBounds(view, area) {
-    //console.log('start loadMarkersInBounds at', new Date().toISOString(), 'with', window.allMarkers.length, 'markers');
+    showLoadingMessage();
 
     const bounds = window.map.getBounds();
     const ne = bounds.getNorthEast();
@@ -606,20 +621,22 @@ class ViewportCache {
 
     const AllParties = 'parties[]=DEM&parties[]=REP&parties[]=NP&parties[]=OTH&parties[]=Not%20registered';
 
-    //const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${partyParams}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
     const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
+    //const url = 'markers.json';
 
+    //showLoadingMessage();
     try {
       const response = await fetch(url);
       //console.log('Response received at', new Date().toISOString());
 
       const data = await response.json();
-      //console.log('Parsed JSON at', new Date().toISOString());
-      //console.log('Fetched', data.markers?.length || 0, 'markers from server in loadMarkersInBounds at', new Date().toISOString());
+      //console.log('Data structure:', data);
 
       if (data.markers) {
+        //console.log('Markers loaded:', data.markers.length);
         const positionGroups = {};
         for (const markerData of data.markers) {
+          //showLoadingMessage();
           const positionKey = `${markerData.latitude},${markerData.longitude}`;
           if (!positionGroups[positionKey]) {
             positionGroups[positionKey] = [];
@@ -627,9 +644,19 @@ class ViewportCache {
           positionGroups[positionKey].push(markerData);
         }
 
-        //Object.values(positionGroups).forEach(group => {
         for (const group of Object.values(positionGroups)) {
-          group.sort((a, b) => a.last_name.localeCompare(b.last_name));
+          //group.sort((a, b) => a.last_name.localeCompare(b.last_name));
+          // for (const marker of group) {
+          //   if (!marker.last_name) {
+          //     console.warn('Missing last_name:', marker);
+          //   }
+          // }
+
+          group.sort((a, b) => {
+            const nameA = a.last_name || '';
+            const nameB = b.last_name || '';
+            return nameA.localeCompare(nameB);
+          });
 
           let voterIdArray = []; // Local array for clustered markers
           let voterAptArray = []; // Local array for apartment info
@@ -656,6 +683,8 @@ class ViewportCache {
             voterIdArray.push(m.voterid);
             voterAptArray.push(m.apartment);
           } // End for m of group
+
+          //showLoadingMessage();
 
           const labelText = `${voterIdArray.length} voters\n`;
           const address = group[0]?.address || 'Unknown address';
@@ -755,6 +784,7 @@ class ViewportCache {
               window.allMarkers.push(marker); // For "clustered" Markers
             } // End of if (!markerCache.has(voterIdArray[1]))
           } else { // End if voterIdArray.length > 10
+            //showLoadingMessage();
             group.forEach(markerData => {
               voterIdArray.forEach((id, index) => {
                 if (id === markerData.voterid) {
@@ -831,8 +861,7 @@ class ViewportCache {
     } catch (error) { // End of try-catch
       console.error('Error in loadMarkersInBounds fetch:', error);
     }
-
-    //console.log('stop loadMarkersInBounds at', new Date().toISOString(), 'with', window.allMarkers.length, 'markers');    
+    hideLoadingMessage();
   } // End of loadMarkersInBounds
 
   const ENABLE_MARKER_CLICK = true;
@@ -906,7 +935,7 @@ class ViewportCache {
         infoWindow.open(map, marker);
       });
     });
-  } // End of attachClusteredMarkerClick
+  } // end of attachClusteredMarkerClick
 
   function calculateAge(birthdateStr) {
     const birthdate = new Date(birthdateStr);
@@ -1081,6 +1110,11 @@ class ViewportCache {
     });
     //console.log('Google Maps API version:', google.maps.version); // 10-05-25 Google Maps API version: 3.62.8d
     })();
+
+    // ✅ Safe to initialize view here
+    window.currentViewType = 'precinct';
+    populateAreaOptions('precinct');
+    drawPolygons('precinct'); // This now runs after the API is ready    
   } // End of initMap
 
   // Add this after your map initialization
@@ -1091,6 +1125,7 @@ class ViewportCache {
         const filterKey = e.target.value;
         const isChecked = e.target.checked;
         //console.log('Checkbox changed for filter:', filterKey, 'checked:', isChecked);
+        //showLoadingMessage();
 
         if (isChecked) {
           window.activeFilters.add(filterKey);
@@ -1328,6 +1363,13 @@ function updateMarkerVisibility() {
   //console.log(`Visible markers: ${visibleCount} of ${total}`);
 }
 
+function showLoadingMessage() {
+  document.getElementById('loading-message').style.display = 'block';
+}
+
+function hideLoadingMessage() {
+  document.getElementById('loading-message').style.display = 'none';
+}
 
 async function handleViewAndUpdate() {
   await handleView(); // waits for loadMarkersInBounds to finish
