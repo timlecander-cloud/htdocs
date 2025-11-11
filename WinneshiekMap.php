@@ -383,6 +383,7 @@ class ViewportCache {
   let rectangleOverlay = null;
 
   let drawnPolygons = [];
+  let currentViewType = null; // track the last drawn type
 
   // For smart toggling of visibility for markers.
   const selectedParties = {
@@ -496,6 +497,12 @@ class ViewportCache {
   }
 
   function drawPolygons(viewType) {
+    // If the viewType hasn't changed, skip redraw
+    if (viewType === currentViewType) {
+      console.log(`Skipping redraw: ${viewType} already displayed`);
+      return;
+    }
+
     // Clear any previously drawn polygons
     drawnPolygons.forEach(polygon => polygon.setMap(null));
     drawnPolygons = [];
@@ -555,6 +562,9 @@ class ViewportCache {
             drawnPolygons.push(polygon);
           });
         });
+
+        // Update the current viewType after successful draw
+        currentViewType = viewType;        
       })
       .catch(error => console.error(`Error loading ${viewType} boundaries:`, error));
   }
@@ -967,6 +977,15 @@ class ViewportCache {
     (async () => {
     //console.log('initMap called at', new Date().toISOString());
     // First import the libraries
+
+    // Default center if no saved state
+    const defaultCenter = { lat: 43.2844, lng: -91.8237 };
+    const defaultZoom = 11.3;
+
+    // Check localStorage for saved state
+    const savedZoom = localStorage.getItem("mapZoom");
+    const savedBounds = localStorage.getItem("mapBounds");
+
     const { Map } = await google.maps.importLibrary("maps");
     
     const { AdvancedMarkerElement: AME } = await google.maps.importLibrary("marker");
@@ -984,13 +1003,27 @@ class ViewportCache {
       //zoom: 20, // To debug local neighborhood
       //zoom: 8, //Entire MidWest
       //zoom: 16, // about two sq. miles.
-      zoom: 11.3, // Entire Winneshiek County
+      //zoom: 11.3, // Entire Winneshiek County
+      zoom: defaultZoom,
       //center: {lat: 43.38024, lng: -91.85018} // Compound
       //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
-      center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
+      //center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
+      center: defaultCenter
       //center: {lat: 43.30473, lng: -91.80182} //502 Mound St
       ,
       mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
+    });
+
+    // If bounds were saved, restore them
+    if (savedBounds) {
+      const boundsObj = JSON.parse(savedBounds);
+      const bounds = new google.maps.LatLngBounds(boundsObj.southwest, boundsObj.northeast);
+      map.fitBounds(bounds);
+    }
+
+    // Save zoom level whenever it changes
+    map.addListener("zoom_changed", () => {
+      localStorage.setItem("mapZoom", map.getZoom());
     });
 
     //console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
@@ -1000,12 +1033,25 @@ class ViewportCache {
     // Optionally enable map movement logic *after* filters are active
     window.map.addListener('idle', () => {
       //console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in addListener idle');        
-      //handleView();
+
+      // 1. Handle view updates      
       handleViewAndUpdate(); // New combined function
       //console.log('calling removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
+      // 2. Marker management
       removeOutOfBoundsAdvancedMarkers(window.map, window.allMarkers);
       //console.log('done with removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
       addInBoundsAdvancedMarkers(window.map, markerCache, window.allMarkers);
+
+      // 3. Persist viewport state
+      const bounds = window.map.getBounds();
+      if (bounds) {
+        const boundsObj = {
+          northeast: bounds.getNorthEast().toJSON(),
+          southwest: bounds.getSouthWest().toJSON(),
+        };
+        localStorage.setItem("mapBounds", JSON.stringify(boundsObj));
+        localStorage.setItem("mapZoom", window.map.getZoom());
+      }
     });
     
     const drawBtn = document.getElementById('drawRectangleBtn');
