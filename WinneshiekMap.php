@@ -156,6 +156,17 @@ class ViewportCache {
     margin-bottom: 6px                    /* Space between labels */
   }
 
+  .township-label {
+    font-size: 48px;              /* 4x larger than the default 12px */
+    font-weight: 600;
+    color: rgba(34, 34, 34, 0.25); /* transparent text (25% opacity) */
+    background: rgba(255, 255, 255, 0.25); /* optional: lighter background */
+    border: none;                 /* optional: remove border if you want it cleaner */
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;         /* let clicks fall through to polygon */
+  }
+
   #map {
       position: relative;
       height: 100vh; /* Full height */
@@ -383,6 +394,7 @@ class ViewportCache {
   let rectangleOverlay = null;
 
   let drawnPolygons = [];
+  let drawnPolygonMarkers = [];
   let currentViewType = null; // track the last drawn type
 
   // For smart toggling of visibility for markers.
@@ -444,13 +456,6 @@ class ViewportCache {
     });
   }
 
-  // Added 07-27-25
-  // Initial population
-  // Moved to initMap 11-11-25
-  // window.currentViewType = 'precinct';
-  // populateAreaOptions('precinct');
-  // drawPolygons('precinct');
-
   async function handleView() {
   const currentView = document.getElementById('viewSelector').value;
   const selectedArea = document.getElementById('areaSelector').value;
@@ -499,13 +504,17 @@ class ViewportCache {
   function drawPolygons(viewType) {
     // If the viewType hasn't changed, skip redraw
     if (viewType === currentViewType) {
-      console.log(`Skipping redraw: ${viewType} already displayed`);
+      //console.log(`Skipping redraw: ${viewType} already displayed`);
       return;
     }
 
     // Clear any previously drawn polygons
     drawnPolygons.forEach(polygon => polygon.setMap(null));
     drawnPolygons = [];
+
+    // Clear any previously drawn markers
+    drawnPolygonMarkers.forEach(marker => marker.map = null);
+    drawnPolygonMarkers = [];
 
     // Define stroke/fill styles per view
     const viewStyles = {
@@ -558,6 +567,34 @@ class ViewportCache {
               fillOpacity: 0.35
             });
 
+            //const centroid = getPolygonCentroid(polygon.getPath());
+
+            // If your precinct_boundaries table includes override_lat and override_lng,
+            // make sure they are passed through into feature.properties.
+
+            const hasOverride =
+              feature.properties?.override_lat != null &&
+              feature.properties?.override_lng != null;
+
+            const position = hasOverride
+              ? { lat: feature.properties.override_lat, lng: feature.properties.override_lng }
+              : getPolygonCentroid(polygon.getPath());            
+
+            // Create a DOM element for the label
+            const labelDiv = document.createElement("div");
+            labelDiv.className = "township-label";
+            //labelDiv.textContent = "Union Township";
+            labelDiv.textContent = feature.properties?.name ?? "Unnamed entity";
+
+            // Drop the label with AdvancedMarkerElement
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              position: position,
+              map: map,
+              content: labelDiv,
+              collisionBehavior: google.maps.CollisionBehavior.REQUIRED
+            });
+            drawnPolygonMarkers.push(marker);
+
             polygon.setMap(map);
             drawnPolygons.push(polygon);
           });
@@ -569,6 +606,14 @@ class ViewportCache {
       .catch(error => console.error(`Error loading ${viewType} boundaries:`, error));
   }
 
+  function getPolygonCentroid(path) {
+    let lat = 0, lng = 0;
+    path.forEach(function(coord) {
+      lat += coord.lat();
+      lng += coord.lng();
+    });
+    return { lat: lat / path.length, lng: lng / path.length };
+  }
 
   // In your main HTML file
   async function loadMarkersInBounds(view, area) {
@@ -1008,9 +1053,21 @@ class ViewportCache {
       //center: {lat: 43.38024, lng: -91.85018} // Compound
       //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
       //center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
-      center: defaultCenter
+      center: defaultCenter,
       //center: {lat: 43.30473, lng: -91.80182} //502 Mound St
-      ,
+      // styles: [
+      //   {
+      //     featureType: "poi.business",
+      //     stylers: [{ visibility: "off" }]
+      //   },
+      //   {
+      //     featureType: "poi",
+      //     elementType: "labels",
+      //     stylers: [{ visibility: "off" }]
+      //   }      
+      // ]
+      // ,
+      
       mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
     });
 
