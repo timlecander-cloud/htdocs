@@ -119,7 +119,7 @@ try {
 	    END || 
 	    COALESCE(p.post_dir || ' ', '') AS address,
             COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-            p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk
+            p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk, p.neighborhood_member_level as neighborhood_member_level
          FROM persons4 p
          WHERE p.latitude BETWEEN \$1 AND \$2
          AND p.longitude BETWEEN \$3 AND \$4
@@ -136,7 +136,7 @@ try {
 	        p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
 	        COALESCE(p.pre_dir || ' ', '') || p.street_name || ' ' || COALESCE(p.street_type, '') || COALESCE(p.post_dir || ' ', '') AS address,
 	        COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-	        p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk
+	        p.full_township AS township, p.precinct AS precinct, p.city_council_ward AS ward, p.county_supervisor AS supervisor, p.voterstatus AS voterstatus, p.regn_num AS voterid, p.strong_voter AS strong_voter, p.young_strong_voter AS young_strong_voter, p.needs_ride_to_poll AS needs_ride_to_poll, p.township_trustee_clerk AS township_trustee_or_clerk, p.neighborhood_member_level as neighborhood_member_level
 	     FROM persons4 p
 	     JOIN addresses a
 	       ON a.addno_full = (
@@ -191,7 +191,8 @@ try {
             'strong_voter' => $row['strong_voter'],
             'young_strong_voter' => $row['young_strong_voter'],
             'needs_ride_to_poll' => $row['needs_ride_to_poll'],
-            'township_trustee_or_clerk' => $row['township_trustee_or_clerk']
+            'township_trustee_or_clerk' => $row['township_trustee_or_clerk'],
+            'neighborhood_member_level' => $row['neighborhood_member_level']
         ];
     }
     pg_free_result($result1);
@@ -199,21 +200,32 @@ try {
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $pgTownshipArray];
     $params2 = [$lat_south, $lat_north, $lng_west, $lng_east, $areaString];
 
-    if (in_array('Not registered', $parties)) {
+    if (in_array('NOT REGISTERED', $parties)) {
 
 	$query2 = sprintf(
 	    "SELECT a.latitude, a.longitude, a.oid_,
-	        a.addno_full || ' ' || 
-		COALESCE(a.st_predir || ' ', '') || 
-		a.st_name || ' ' || 
-		COALESCE(a.st_postyp, '') ||
-		CASE
-		  WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
-		       AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
-		  THEN ' '
-		  ELSE ''
-		END ||
-		COALESCE(a.st_posdir || ' ', '') AS address,
+	    --    a.addno_full || ' ' || 
+		--COALESCE(a.st_predir || ' ', '') || 
+		--a.st_name || ' ' || 
+		--COALESCE(a.st_postyp, '') ||
+		--CASE
+		--  WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
+		--       AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
+		--  THEN ' '
+		--  ELSE ''
+		--END ||
+		--COALESCE(a.st_posdir || ' ', '') AS address,
+            a.addno_full || ' ' ||
+        COALESCE(NULLIF(a.st_predir, '') || ' ', '') ||
+        a.st_name || ' ' ||
+        COALESCE(a.st_postyp, '') ||
+        CASE
+            WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
+                AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
+            THEN ' '
+        ELSE ''
+        END ||
+        COALESCE(NULLIF(a.st_posdir, '') || ' ', '') AS address,
 	        COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
 	        a.full_township AS township, a.precinct AS precinct, a.city_council_ward AS ward, a.county_supervisor AS supervisor
 	     FROM addresses a
@@ -263,7 +275,7 @@ try {
             'longitude' => floatval($row['longitude']),
             'first_name' => '',
             'last_name' => '',
-            'party' => 'Not registered',
+            'party' => 'NOT REGISTERED',
             'address' => $row['address'],
 	        'apartment' => $row['apartment'],
             'township' => $row['township'],
@@ -275,7 +287,8 @@ try {
 	        'strong_voter' => '',
             'young_strong_voter' => '',
             'needs_ride_to_poll' => '',
-            'township_trustee_or_clerk' => ''
+            'township_trustee_or_clerk' => '',
+            'neighborhood_member_level' => ''
         ];
     }
 
