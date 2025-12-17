@@ -2,7 +2,6 @@
 require 'db_connection.php';
 
 $conn = getDbConnection();
-
 if (!$conn) {
     die("Connection failed");
 }
@@ -12,7 +11,7 @@ if (isset($_POST['search'])) {
     $regn_num = $_POST['regn_num'];
 
     $query = "SELECT regn_num, first_name, last_name, house_num, pre_dir, street_name, street_type, city, zip_code, precinct, 
-                     county_supervisor, city_council_ward, full_township, unit_type, unit_num
+                     county_supervisor, city_council_ward, full_township, unit_type, unit_num, latitude, longitude
               FROM persons4 
               WHERE regn_num = $1";
     $result = pg_query_params($conn, $query, array($regn_num));
@@ -26,7 +25,7 @@ if (isset($_POST['update'])) {
     $fields = [
         'house_num', 'pre_dir', 'street_name', 'street_type', 'city',
         'zip_code', 'precinct', 'county_supervisor', 'city_council_ward',
-        'full_township', 'unit_type', 'unit_num'
+        'full_township', 'unit_type', 'unit_num', 'latitude', 'longitude'
     ];
 
     $updates = [];
@@ -50,6 +49,34 @@ if (isset($_POST['update'])) {
         echo "No fields provided to update.";
     }
 }
+
+// Handle latitude/longitude lookup from addresses table
+if (isset($_POST['lookup_latlng'])) {
+    $house_num = $_POST['house_num'];
+    $pre_dir   = $_POST['pre_dir'];
+    $street    = $_POST['street_name'];
+    $stype     = $_POST['street_type'];
+    $city      = $_POST['city'];
+    $zip       = $_POST['zip_code'];
+
+    $query = "SELECT latitude, longitude 
+              FROM addresses 
+              WHERE add_number = $1 
+                AND st_predir = $2 
+                AND st_name = $3 
+                AND st_postyp = $4 
+                AND post_city = $5 
+                AND zip_code = $6";
+
+    $lookup_result = pg_query_params($conn, $query, array($house_num, $pre_dir, $street, $stype, $city, $zip));
+    if ($lookup_result && pg_num_rows($lookup_result) > 0) {
+        $coords = pg_fetch_assoc($lookup_result);
+        echo "Lookup successful: Latitude = " . htmlspecialchars($coords['latitude']) . 
+             ", Longitude = " . htmlspecialchars($coords['longitude']);
+    } else {
+        echo "No matching address found for lookup.";
+    }
+}
 ?>
 
 <!-- HTML Form -->
@@ -65,6 +92,7 @@ if (isset($_POST['update'])) {
             <th>Regn_num</th><th>First Name</th><th>Last Name</th><th>House #</th><th>Pre Dir</th>
             <th>Street Name</th><th>Street Type</th><th>City</th><th>Zip</th><th>Precinct</th>
             <th>County Supervisor</th><th>City Council Ward</th><th>Full Township</th><th>Unit Type</th><th>Unit #</th>
+            <th>Latitude</th><th>Longitude</th>
         </tr>
         <tr>
             <td><?= htmlspecialchars($row['regn_num']) ?></td>
@@ -82,6 +110,8 @@ if (isset($_POST['update'])) {
             <td><?= htmlspecialchars($row['full_township']) ?></td>
             <td><?= htmlspecialchars($row['unit_type']) ?></td>
             <td><?= htmlspecialchars($row['unit_num']) ?></td>
+            <td><?= htmlspecialchars($row['latitude']) ?></td>
+            <td><?= htmlspecialchars($row['longitude']) ?></td>
         </tr>
     </table>
 
@@ -102,7 +132,12 @@ if (isset($_POST['update'])) {
                 <td><input type="text" name="full_township" placeholder="Full Township"></td>
                 <td><input type="text" name="unit_type" placeholder="Unit Type"></td>
                 <td><input type="text" name="unit_num" placeholder="Unit #"></td>
-                <td><button type="submit" name="update">Update</button></td>
+                <td><input type="text" name="latitude" placeholder="Latitude"></td>
+                <td><input type="text" name="longitude" placeholder="Longitude"></td>
+                <td>
+                    <button type="submit" name="update">Update</button>
+                    <button type="submit" name="lookup_latlng">Lookup Lat/Lng</button>
+                </td>
             </tr>
         </table>
     </form>
