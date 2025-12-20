@@ -243,14 +243,6 @@ class ViewportCache {
     pointer-events: none;
   }
 </style>
-<!-- Load Google Maps JavaScript API (not) relocated at bottom of body 10-24-25 -->
- <!--
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC_KbKXsaVsdkaOvEHWYfP0Gn1lBGB-eRU&loading=async&callback=initMap&libraries=marker,drawing" loading="async">
--->
-<!-- </script> -->
-<!--
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC_KbKXsaVsdkaOvEHWYfP0Gn1lBGB-eRU&loading=async&callback=initMap"></script>
--->
 
 </head>
 <body>
@@ -309,8 +301,8 @@ class ViewportCache {
       <label><input type="checkbox" value="NeighborhoodMember" id="filter-neighborhood-member"> Neighborhood Member</label>   
     </div>
 
-    <!--<button id="drawRectangleBtn">Draw Rectangle</button>-->
-    <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button>
+    <button id="drawRectangleBtn">Draw Rectangle</button>
+    <!-- <button id="drawRectangleBtn" style="display: none;">Draw Rectangle</button> -->
 
     <!-- Loading message element -->
     <div id="loading-message">⏳ Loading markers...</div>
@@ -333,8 +325,6 @@ class ViewportCache {
 
  <div id="debugOverlay">Debug overlay is active</div>
   
-  <!--<div id="map" style="height: 600px;"></div>-->
-
   <div id="map"></div>
 
   <!-- 09-10-25 Voter Detail -->
@@ -395,6 +385,9 @@ class ViewportCache {
   const wardOptions = ['none','all','DE1','DE2','DE3','DE4','DE5'];
   const supervisorOptions = ['none','1','2','3','4','5'];
 
+  let map;
+  let visibleParties = new Set();
+  let selectedParties = new Set();
   let isDrawing = false;
   let startLatLng = null;
   let rectangleOverlay = null;
@@ -402,33 +395,6 @@ class ViewportCache {
   let drawnPolygons = [];
   let drawnPolygonMarkers = [];
   let currentViewType = null; // track the last drawn type
-
-  // // For smart toggling of visibility for markers.
-  // const selectedParties = {
-  //   DEM: false,
-  //   REP: false,
-  //   NP: false,
-  //   OTH: false,
-  //   'Not Registered': false,
-  //   'Strong': false,
-  //   'YoungStrong': false,
-  //   'Inactive': false,
-  //   'NeedsRide': false
-  //   // add others as needed
-  // };
-
-  // const loadedParties = {
-  //   DEM: false,
-  //   REP: false,
-  //   NP: false,
-  //   OTH: false,
-  //   'Not Registered': false,
-  //   'Strong': false,
-  //   'YoungStrong': false,
-  //   'Inactive': false,
-  //   'NeedsRide': false
-  //   // add others as needed
-  // };
 
   // Dropdown population function
   function populateAreaOptions(view) {
@@ -508,61 +474,37 @@ class ViewportCache {
   }
 
   function drawPolygons(viewType) {
-    // If the viewType hasn't changed, skip redraw
-    if (viewType === currentViewType) {
-      //console.log(`Skipping redraw: ${viewType} already displayed`);
-      return;
-    }
+    if (viewType === currentViewType) return;
 
-    // Clear any previously drawn polygons
-    drawnPolygons.forEach(polygon => polygon.setMap(null));
+    drawnPolygons.forEach((polygon) => polygon.setMap(null));
     drawnPolygons = [];
 
-    // Clear any previously drawn markers
-    drawnPolygonMarkers.forEach(marker => marker.map = null);
+    drawnPolygonMarkers.forEach((marker) => (marker.map = null));
     drawnPolygonMarkers = [];
 
-    // Define stroke/fill styles per view
     const viewStyles = {
-      township: { strokeColor: '#0000FF', fillColor: '#0000FF' },
-      precinct: { strokeColor: '#0000FF', fillColor: '#0000FF' },
-      //precinct: { strokeColor: '#c3c3e9ff', fillColor: '#c3c3e9ff' }
+      township: { strokeColor: "#0000FF", fillColor: "#0000FF" },
+      precinct: { strokeColor: "#0000FF", fillColor: "#0000FF" },
     };
 
-    // Only draw if viewType is supported
-    if (!['township', 'precinct'].includes(viewType)) {
-      //console.log(`${viewType.charAt(0).toUpperCase() + viewType.slice(1)} view selected (no polygons to draw)`);
-      return;
-    }
-
-    //console.log(`${viewType.charAt(0).toUpperCase() + viewType.slice(1)} view selected`);
+    if (!["township", "precinct"].includes(viewType)) return;
 
     fetch(`get_boundaries.php?type=${viewType}`)
-      .then(response => response.json())
-      .then(geojson => {
-        geojson.features.forEach(feature => {
+      .then((response) => response.json())
+      .then((geojson) => {
+        geojson.features.forEach((feature) => {
           const geom = feature.geometry;
-          if (!geom || !geom.coordinates) {
-            console.warn('Missing geometry:', feature);
-            return;
-          }
+          if (!geom || !geom.coordinates) return;
 
           let rings = [];
-
-          if (geom.type === 'Polygon') {
+          if (geom.type === "Polygon") {
             rings = geom.coordinates;
-          } else if (geom.type === 'MultiPolygon') {
+          } else if (geom.type === "MultiPolygon") {
             rings = geom.coordinates.flat();
-          } else {
-            console.warn('Unsupported geometry type:', geom.type);
-            return;
           }
 
-          rings.forEach(ring => {
-            const path = ring.map(coord => ({
-              lat: coord[1], // GeoJSON: [lng, lat] → Google Maps: {lat, lng}
-              lng: coord[0]
-            }));
+          rings.forEach((ring) => {
+            const path = ring.map((coord) => ({ lat: coord[1], lng: coord[0] }));
 
             const polygon = new google.maps.Polygon({
               paths: path,
@@ -570,13 +512,9 @@ class ViewportCache {
               strokeOpacity: 0.8,
               strokeWeight: 2,
               fillColor: viewStyles[viewType].fillColor,
-              fillOpacity: 0.35
+              fillOpacity: 0.35,
+              clickable: false,   // ✅ prevents swallowing mouse events
             });
-
-            //const centroid = getPolygonCentroid(polygon.getPath());
-
-            // If your precinct_boundaries table includes override_lat and override_lng,
-            // make sure they are passed through into feature.properties.
 
             const hasOverride =
               feature.properties?.override_lat != null &&
@@ -584,32 +522,29 @@ class ViewportCache {
 
             const position = hasOverride
               ? { lat: feature.properties.override_lat, lng: feature.properties.override_lng }
-              : getPolygonCentroid(polygon.getPath());            
+              : getPolygonCentroid(polygon.getPath());
 
-            // Create a DOM element for the label
             const labelDiv = document.createElement("div");
             labelDiv.className = "township-label";
-            //labelDiv.textContent = "Union Township";
             labelDiv.textContent = feature.properties?.name ?? "Unnamed entity";
 
-            // Drop the label with AdvancedMarkerElement
             const marker = new google.maps.marker.AdvancedMarkerElement({
-              position: position,
-              map: map,
+              position,
+              map, // ✅ now uses the global let map
               content: labelDiv,
-              collisionBehavior: google.maps.CollisionBehavior.REQUIRED
+              collisionBehavior: google.maps.CollisionBehavior.REQUIRED,
             });
             drawnPolygonMarkers.push(marker);
 
-            polygon.setMap(map);
+            polygon.setMap(map); // ✅ now uses the global let map
             drawnPolygons.push(polygon);
           });
         });
 
-        // Update the current viewType after successful draw
-        currentViewType = viewType;        
+        currentViewType = viewType;
+        //console.log(`Successfully drew ${viewType} polygons`);
       })
-      .catch(error => console.error(`Error loading ${viewType} boundaries:`, error));
+      .catch((error) => console.error(`Error loading ${viewType} boundaries:`, error));
   }
 
   function getPolygonCentroid(path) {
@@ -625,7 +560,7 @@ class ViewportCache {
   async function loadMarkersInBounds(view, area) {
     showLoadingMessage();
 
-    const bounds = window.map.getBounds();
+    const bounds = map.getBounds();
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
     const allFilters = Array.from(window.activeFilters);
@@ -877,9 +812,6 @@ class ViewportCache {
               //console.log(nmlSummary);
               // Example output: "NML: 42"
 
-              //const tooltipContent = `${address}\r\n${partySummary}`;
-              // Build tooltip content with both summaries
-              //const tooltipContent = `${address}\r\n${partySummary}\r\n${nmlSummary}`;
               const tooltipContent = `${address}`;
 
               // Party summary node
@@ -902,7 +834,7 @@ class ViewportCache {
                   lat: parseFloat(markerData.latitude),
                   lng: parseFloat(markerData.longitude)
                 },
-                map: window.map,                
+                map: map,                
                 content: container
               }); // End of marker
 
@@ -980,7 +912,6 @@ class ViewportCache {
                       </svg>
                     `;
 
-                    //console.log('namesList for marker:', namesList);
                     const tooltipContent = `${address}\r\n${namesList}`;
 
                     markerElement.title = tooltipContent;
@@ -990,7 +921,7 @@ class ViewportCache {
                         lat: parseFloat(markerData.latitude),
                         lng: parseFloat(markerData.longitude)
                       },
-                      map: window.map,
+                      map: map,
                       content: markerElement,
                       zIndex: 1000 - index
                     }); // End of marker
@@ -1031,81 +962,6 @@ class ViewportCache {
   } // End of loadMarkersInBounds
 
   const ENABLE_MARKER_CLICK = true;
-
-  // function attachClusteredMarkerClick(marker, voterIdArray, voterPartyArray, address, voterAptArray, map, infoWindow) {
-  //   marker.addListener('click', () => {
-  //     if (!ENABLE_MARKER_CLICK) return;
-
-  //     const fetchPromises = voterIdArray.map((id, index) => {
-  //       const apt_info = voterAptArray[index];
-
-  //       //console.log('Fetching details for voter ID:', id, 'with apt info:', apt_info);
-  //       //console.log('Party for voter ID:', id, 'is:', marker.metadata.party);
-  //       //if (marker.metadata.party.toLowerCase() === 'not registered') {
-  //       //if (id === 'Not registered') {
-  //       if (voterPartyArray[index].toLowerCase() === 'not registered') {
-  //         return Promise.resolve({
-  //           first_name: 'Not Registered',
-  //           last_name: '',
-  //           apt_info: apt_info
-  //         });
-  //       } else {
-  //         return fetch(`/get_voter_details.php?regn_num=${id}`)
-  //           .then(res => res.json())
-  //           .then(voter => ({ ...voter, apt_info })); // attach apt_info to fetched voter
-  //       }
-  //     });
-
-  //     Promise.all(fetchPromises).then(voterDetailsArray => {
-  //       const voterBlocks = voterDetailsArray.map(voter => {
-  //         if (voter.first_name === 'Not Registered') {
-  //           return `
-  //             <div style="margin-bottom: 8px;">
-  //               <strong>Not Registered ${voter.apt_info}</strong>
-  //             </div>
-  //           `;
-  //         }
-
-  //         const age = voter.birthdate ? calculateAge(voter.birthdate) : 'Unknown';
-  //         const history = voter.general_election_history || 'None';
-  //         const strong = voter.strong_voter === 't' ? 'Yes' : 'No';
-  //         const youngStrong = voter.young_strong_voter === 't' ? 'Yes' : 'No';
-  //         const needsRide = voter.needs_ride_to_poll === 't' ? 'Yes' : 'No';
-  //         const trusteeClerk = voter.township_trustee_or_clerk === 't' ? 'Yes' : 'No';
-  //         const neighborhoodMember = Number(voter.neighborhood_member_level) > 0 ? 'Yes' : 'No';
-
-  //         return `
-  //           <div style="margin-bottom: 8px;">
-  //             <strong>${voter.first_name} ${voter.last_name} ${voter.apt_info}</strong><br>
-  //             Party: ${voter.party}<br>
-  //             Status: ${voter.voterstatus}<br>
-  //             Age: ${age}<br>
-  //             History: ${history}<br>
-  //             Strong Voter: ${strong}<br>
-  //             Young Strong Voter: ${youngStrong}<br>
-  //             Needs ride to poll: ${needsRide}<br>
-  //             Township Trustee or Clerk: ${trusteeClerk}<br>
-  //             Neighborhood Member: ${neighborhoodMember}
-  //           </div>
-  //         `;
-  //       }).join('<hr>');
-
-  //       const htmlContent = `
-  //         <div style="max-width: 300px; font-size: 12px;">
-  //           <strong>${address}</strong><br><br>
-  //           ${voterBlocks}
-  //         </div>
-  //       `;
-
-  //       infoWindow.setContent(htmlContent);
-  //       infoWindow.open(map, marker);
-  //     }).catch(err => {
-  //       console.error('Error fetching voter details:', err);
-  //       infoWindow.setContent('<div>Error loading voter details.</div>');
-  //       infoWindow.open(map, marker);
-  //     });
-  //   });
-  // } // end of attachClusteredMarkerClick
 
   function attachClusteredMarkerClick(marker,voterIdArray,voterPartyArray,address,voterAptArray,map,infoWindow,activeFilters) { // <-- pass in your ActiveFilters set
     marker.addListener('click', () => {
@@ -1214,116 +1070,75 @@ class ViewportCache {
     }
   }
 
-  window.initMap = function() {
-    (async () => {
-    //console.log('initMap called at', new Date().toISOString());
-    // First import the libraries
-
+  async function initMap() {
     // Default center if no saved state
     const defaultCenter = { lat: 43.2844, lng: -91.8237 };
     const defaultZoom = 11.3;
 
-    // Check localStorage for saved state
+    // Restore saved state
     const savedZoom = localStorage.getItem("mapZoom");
     const savedBounds = localStorage.getItem("mapBounds");
 
+    // Import libraries
     const { Map } = await google.maps.importLibrary("maps");
-    
     const { AdvancedMarkerElement: AME } = await google.maps.importLibrary("marker");
     const { DrawingManager } = await google.maps.importLibrary("drawing");
-    
-    AdvancedMarkerElement = AME;    
 
-    startLatLng = null;
-    rectangleOverlay = null;
-    isDrawing = false;
-      
-    //map = new google.maps.Map(document.getElementById('map'), {
-    window.map = new google.maps.Map(document.getElementById('map'), {
-      //zoom: 18, // Includes about square mile
-      //zoom: 20, // To debug local neighborhood
-      //zoom: 8, //Entire MidWest
-      //zoom: 16, // about two sq. miles.
-      //zoom: 11.3, // Entire Winneshiek County
+    AdvancedMarkerElement = AME; // expose globally if needed
+
+    // Create the map instance
+    map = new Map(document.getElementById("map"), {
       zoom: defaultZoom,
-      //center: {lat: 43.38024, lng: -91.85018} // Compound
-      //center: {lat: 43.36217, lng: -91.85208} // Huthinsons
-      //center: {lat: 43.2844, lng: -91.8237} //Winneshiek County
       center: defaultCenter,
-      // styles: [
-      //   {
-      //     featureType: "poi.business",
-      //     stylers: [{ visibility: "off" }]
-      //   },
-      //   {
-      //     featureType: "poi",
-      //     elementType: "labels",
-      //     stylers: [{ visibility: "off" }]
-      //   }      
-      // ]
-      // ,
-      
-      mapId: "d2dc915212929407d8b8bd36", // Map ID is required for advanced markers
+      mapId: "d2dc915212929407d8b8bd36",
     });
 
-    // If bounds were saved, restore them
+    // Restore bounds if saved
     if (savedBounds) {
       const boundsObj = JSON.parse(savedBounds);
       const bounds = new google.maps.LatLngBounds(boundsObj.southwest, boundsObj.northeast);
       map.fitBounds(bounds);
     }
 
-    // Save zoom level whenever it changes
+    // Persist zoom changes
     map.addListener("zoom_changed", () => {
       localStorage.setItem("mapZoom", map.getZoom());
     });
 
-    //console.log('window.map instanceof google.maps.Map:', window.map instanceof google.maps.Map);
-
+    // Filters and idle logic
     initFilters();
+    map.addListener("idle", () => {
+      handleViewAndUpdate();
+      removeOutOfBoundsAdvancedMarkers(map, window.allMarkers);
+      addInBoundsAdvancedMarkers(map, markerCache, window.allMarkers);
 
-    // Optionally enable map movement logic *after* filters are active
-    window.map.addListener('idle', () => {
-      //console.log('handleViewAndUpdate called at', new Date().toISOString(), 'in addListener idle');        
-
-      // 1. Handle view updates      
-      handleViewAndUpdate(); // New combined function
-      //console.log('calling removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
-      // 2. Marker management
-      removeOutOfBoundsAdvancedMarkers(window.map, window.allMarkers);
-      //console.log('done with removeOutOfBoundsAdvancedMarkers called at', new Date().toISOString(), 'in addListener idle');
-      addInBoundsAdvancedMarkers(window.map, markerCache, window.allMarkers);
-
-      // 3. Persist viewport state
-      const bounds = window.map.getBounds();
+      const bounds = map.getBounds();
       if (bounds) {
         const boundsObj = {
           northeast: bounds.getNorthEast().toJSON(),
           southwest: bounds.getSouthWest().toJSON(),
         };
         localStorage.setItem("mapBounds", JSON.stringify(boundsObj));
-        localStorage.setItem("mapZoom", window.map.getZoom());
+        localStorage.setItem("mapZoom", map.getZoom());
       }
     });
-    
-    const drawBtn = document.getElementById('drawRectangleBtn');
-    const tooltip = document.getElementById('drawTooltip');
 
-    drawBtn.addEventListener('click', () => {
+    // Drawing button logic
+    const drawBtn = document.getElementById("drawRectangleBtn");
+    const tooltip = document.getElementById("drawTooltip");
+
+    drawBtn.addEventListener("click", () => {
       isDrawing = !isDrawing;
-
       if (isDrawing) {
-        startLatLng = null; // ✅ clear previous starting point        
+        startLatLng = null;
         map.setOptions({ draggable: false });
-        tooltip.style.display = 'block';
-        drawBtn.textContent = 'Cancel Drawing'; // optional: update button label
+        tooltip.style.display = "block";
+        drawBtn.textContent = "Cancel Drawing";
       } else {
         map.setOptions({ draggable: true });
-        tooltip.style.display = 'none';
-        drawBtn.textContent = 'Start Drawing'; // optional: revert label
+        tooltip.style.display = "none";
+        drawBtn.textContent = "Start Drawing";
         startLatLng = null;
-
-        // If a rectangle was partially drawn, remove it
         if (rectangleOverlay) {
           rectangleOverlay.setMap(null);
           rectangleOverlay = null;
@@ -1331,18 +1146,16 @@ class ViewportCache {
       }
     });
 
-    //map.addListener('mousedown', (e) => {
-    window.map.addListener('mousedown', (e) => {
-      updateDebugOverlay();
+    // Mouse events
+    map.addListener("mousedown", (e) => {
+      //console.log("Map mousedown at", e.latLng.toUrlValue());      
       if (!isDrawing) return;
       startLatLng = e.latLng;
     });
 
-    //map.addListener('mousemove', (e) => {
-    window.map.addListener('mousemove', (e) => {
-      updateDebugOverlay();
+    map.addListener("mousemove", (e) => {
+      //console.log("Map mousemove at", e.latLng.toUrlValue(), isDrawing);
       if (!isDrawing || !startLatLng) return;
-
       const bounds = new google.maps.LatLngBounds();
       bounds.extend(startLatLng);
       bounds.extend(e.latLng);
@@ -1351,69 +1164,141 @@ class ViewportCache {
         rectangleOverlay.setBounds(bounds);
       } else {
         rectangleOverlay = new google.maps.Rectangle({
-          bounds: bounds,
-          map: map,
-          strokeColor: '#FF0000',
+          bounds,
+          map,
+          clickable: false,
+          strokeColor: "#FF0000",
           strokeWeight: 2,
           fillOpacity: 0.1,
         });
       }
     });
 
-    //map.addListener('mouseup', () => {
-    window.map.addListener('mouseup', () => {
-      updateDebugOverlay();
+    map.addListener("mouseup", () => {
+      //console.log("Map mouseup");
       if (!isDrawing) return;
-
       isDrawing = false;
       map.setOptions({ draggable: true });
-      tooltip.style.display = 'none';
+      tooltip.style.display = "none";
 
       if (rectangleOverlay && rectangleOverlay.getBounds) {
         const bounds = rectangleOverlay.getBounds();
+        const counts = countPartiesInsideRectangle(bounds);
 
-        const ne = bounds.getNorthEast();
-        const sw = bounds.getSouthWest();
+        alert(
+          `Democrats: ${counts.DEM}
+        Republicans: ${counts.REP}
+        No Party: ${counts.NP}
+        Other: ${counts.OTH}
+        Not Registered: ${counts["NOT REGISTERED"]}`
+        );
 
-        // trigger fetch to filter_markers.php here
-        const partiesToSend = Array.from(window.visibleParties);
+        rectangleOverlay.setMap(null);
+        rectangleOverlay = null;
+        drawBtn.textContent = "Start Drawing";
+        startLatLng = null;
 
-        fetch('filter_markers.php', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            ne_lat: ne.lat(),
-            ne_lng: ne.lng(),
-            sw_lat: sw.lat(),
-            sw_lng: sw.lng(),
-            visibleParties: partiesToSend // e.g., ['Democrat', 'Republican']
-          })
-        })
-        .then(response => response.json())
-        .then(data => {
-          // Display results
-          alert(`Democrats: ${data.dem ?? 0}, Republicans: ${data.rep ?? 0}, No Party: ${data.np ?? 0}, Other: ${data.oth ?? 0}`);
+        // const bounds = rectangleOverlay.getBounds();
+        // const ne = bounds.getNorthEast();
+        // const sw = bounds.getSouthWest();
 
-          // ✅ Remove the rectangle from the map
-          rectangleOverlay.setMap(null);
-          rectangleOverlay = null; 
-          
-          drawBtn.textContent = 'Start Drawing';
+        // // ✅ NEW: populate visibleParties based on markers inside the rectangle
+        // updateVisiblePartiesFromRectangle(bounds);        
 
-          startLatLng = null; // ✅ clear starting point to prevent phantom rectangles          
-        });
-      } else {
-        console.warn('No rectangle was drawn.');
+        // const partiesToSend = Array.from(visibleParties);
+
+        // fetch("filter_markers.php", {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify({
+        //     ne_lat: ne.lat(),
+        //     ne_lng: ne.lng(),
+        //     sw_lat: sw.lat(),
+        //     sw_lng: sw.lng(),
+        //     visibleParties: partiesToSend,
+        //   }),
+        // })
+        //   .then((response) => response.json())
+        //   .then((data) => {
+        //     alert(
+        //       `Democrats: ${data.dem ?? 0}, Republicans: ${data.rep ?? 0}, No Party: ${data.np ?? 0}, Other: ${data.oth ?? 0}`
+        //     );
+        //     rectangleOverlay.setMap(null);
+        //     rectangleOverlay = null;
+        //     drawBtn.textContent = "Start Drawing";
+        //     startLatLng = null;
+        //   });
       }
     });
-    //console.log('Google Maps API version:', google.maps.version); // 10-05-25 Google Maps API version: 3.62.8d
-    })();
 
-    // ✅ Safe to initialize view here
-    window.currentViewType = 'precinct';
-    populateAreaOptions('precinct');
-    drawPolygons('precinct'); // This now runs after the API is ready    
-  } // End of initMap
+    // Initialize polygons
+    window.currentViewType = "precinct";
+    populateAreaOptions("precinct");
+    drawPolygons("precinct");
+  } //end of initMap
+
+  function updateVisiblePartiesFromRectangle(bounds) {
+    visibleParties.clear();
+
+    if (!Array.isArray(window.allMarkers)) {
+      console.warn("allMarkers is not an array");
+      return;
+    }
+
+    for (const entry of window.allMarkers) {
+      if (!entry) continue;
+
+      const { position, metadata } = entry;
+      const party = metadata?.party;
+
+      // Skip markers missing required fields
+      if (!position || !party) continue;
+
+      // ✅ Skip markers whose party is NOT selected in the UI
+      if (!selectedParties.has(party)) continue;
+
+      // ✅ Now check if the marker is inside the rectangle
+      if (bounds.contains(position)) {
+        visibleParties.add(party);
+      }
+    }
+
+    console.log("visibleParties inside rectangle:", [...visibleParties]);
+  }
+
+  function countPartiesInsideRectangle(bounds) {
+    const counts = {
+      DEM: 0,
+      REP: 0,
+      NP: 0,
+      OTH: 0,
+      "NOT REGISTERED": 0
+    };
+
+    for (const entry of window.allMarkers) {
+      if (!entry) continue;
+
+      const { position, metadata } = entry;
+      const party = metadata?.party;
+
+      if (!position || !party) continue;
+
+      // Skip if user has filtered this party out
+      if (!selectedParties.has(party)) continue;
+
+      // Check if marker is inside the rectangle
+      if (bounds.contains(position)) {
+        if (counts.hasOwnProperty(party)) {
+          counts[party]++;
+        } else {
+          // Safety: unexpected party codes
+          counts[party] = 1;
+        }
+      }
+    }
+
+    return counts;
+  }
 
   // Add this after your map initialization
   function initFilters() {
@@ -1461,16 +1346,28 @@ class ViewportCache {
       handleViewAndUpdate(); // New combined function
     }); // areaSelector change event
 
+    document.querySelectorAll('.party-filters input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          selectedParties.add(cb.value);   // e.g., "DEM"
+        } else {
+          selectedParties.delete(cb.value);
+        }
+
+        //console.log("Selected parties:", [...selectedParties]);
+      });
+    });
+
   } // End of initFilters
 
   function updateDebugOverlay() {
-    const overlay = document.getElementById('debugOverlay');
-    overlay.innerHTML = `
-      <strong>Debug Info</strong><br>
-      isDrawing: ${isDrawing}<br>
-      startLatLng: ${startLatLng ? startLatLng.toUrlValue() : 'null'}<br>
-      rectangle: ${rectangleOverlay ? 'active' : 'none'}<br>
-    `;
+    // const overlay = document.getElementById('debugOverlay');
+    // overlay.innerHTML = `
+    //   <strong>Debug Info</strong><br>
+    //   isDrawing: ${isDrawing}<br>
+    //   startLatLng: ${startLatLng ? startLatLng.toUrlValue() : 'null'}<br>
+    //   rectangle: ${rectangleOverlay ? 'active' : 'none'}<br>
+    // `;
   }
   
   let lastFilterState = {};
