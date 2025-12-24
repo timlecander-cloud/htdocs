@@ -485,9 +485,10 @@ class ViewportCache {
     const viewStyles = {
       township: { strokeColor: "#0000FF", fillColor: "#0000FF" },
       precinct: { strokeColor: "#0000FF", fillColor: "#0000FF" },
+      supervisor: { strokeColor: "#0000FF", fillColor: "#0000FF" },
     };
 
-    if (!["township", "precinct"].includes(viewType)) return;
+    if (!["township", "precinct", "supervisor"].includes(viewType)) return;
 
     fetch(`get_boundaries.php?type=${viewType}`)
       .then((response) => response.json())
@@ -505,7 +506,7 @@ class ViewportCache {
 
           rings.forEach((ring) => {
             const path = ring.map((coord) => ({ lat: coord[1], lng: coord[0] }));
-
+            //console.log('Drawing polygon with path:', path);
             const polygon = new google.maps.Polygon({
               paths: path,
               strokeColor: viewStyles[viewType].strokeColor,
@@ -535,6 +536,7 @@ class ViewportCache {
               collisionBehavior: google.maps.CollisionBehavior.REQUIRED,
             });
             drawnPolygonMarkers.push(marker);
+            //console.log('Marker created with position:', position);
 
             polygon.setMap(map); // ✅ now uses the global let map
             drawnPolygons.push(polygon);
