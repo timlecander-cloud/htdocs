@@ -1200,36 +1200,6 @@ class ViewportCache {
         drawBtn.textContent = "Start Drawing";
         startLatLng = null;
 
-        // const bounds = rectangleOverlay.getBounds();
-        // const ne = bounds.getNorthEast();
-        // const sw = bounds.getSouthWest();
-
-        // // ✅ NEW: populate visibleParties based on markers inside the rectangle
-        // updateVisiblePartiesFromRectangle(bounds);        
-
-        // const partiesToSend = Array.from(visibleParties);
-
-        // fetch("filter_markers.php", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify({
-        //     ne_lat: ne.lat(),
-        //     ne_lng: ne.lng(),
-        //     sw_lat: sw.lat(),
-        //     sw_lng: sw.lng(),
-        //     visibleParties: partiesToSend,
-        //   }),
-        // })
-        //   .then((response) => response.json())
-        //   .then((data) => {
-        //     alert(
-        //       `Democrats: ${data.dem ?? 0}, Republicans: ${data.rep ?? 0}, No Party: ${data.np ?? 0}, Other: ${data.oth ?? 0}`
-        //     );
-        //     rectangleOverlay.setMap(null);
-        //     rectangleOverlay = null;
-        //     drawBtn.textContent = "Start Drawing";
-        //     startLatLng = null;
-        //   });
       }
     });
 
@@ -1279,6 +1249,10 @@ class ViewportCache {
 
     for (const entry of window.allMarkers) {
       if (!entry) continue;
+
+      // Skip markers not visible on the map OR hidden via CSS
+      if (entry.map === null) continue;
+      if (entry.element?.style?.display === "none") continue;      
 
       const { position, metadata } = entry;
       const party = metadata?.party;
