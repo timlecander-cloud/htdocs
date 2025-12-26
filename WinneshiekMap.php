@@ -273,7 +273,7 @@ class ViewportCache {
     </div>
 
     <!-- ✅ New Neighborhoods checkbox -->
-    <div class="neighborhood-filter">
+    <div class="neighborhood_number-filter">
       <label><input type="checkbox" id="filter-neighborhoods"> Neighborhoods Only</label>
     </div>
 
@@ -594,8 +594,8 @@ class ViewportCache {
         break;
     }
 
-    const neighborhoodChecked = document.getElementById('filter-neighborhoods').checked;
-    const neighborhoodParam = neighborhoodChecked ? '&neighborhoods=true' : '';
+    //const neighborhoodChecked = document.getElementById('filter-neighborhoods').checked;
+    //const neighborhoodParam = neighborhoodChecked ? '&neighborhoods=true' : '';
     const filterInactiveOnly = document.getElementById('filter-voterstatus').checked;
     const filterStrongVotersOnly = document.getElementById('filter-strongvoters').checked;
     const filterYoungStrongVotersOnly = document.getElementById('filter-youngstrongvoters').checked;
@@ -619,10 +619,10 @@ class ViewportCache {
 
     const AllParties = 'parties[]=DEM&parties[]=REP&parties[]=NP&parties[]=OTH&parties[]=NOT%20REGISTERED';
 
-    const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
+    //const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
+    const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${precinctParams}&${wardParams}&${supervisorParams}`;
     //const url = 'markers.json';
 
-    //showLoadingMessage();
     try {
       const response = await fetch(url);
       //console.log('Response received at', new Date().toISOString());
@@ -648,28 +648,28 @@ class ViewportCache {
             return nameA.localeCompare(nameB);
           });
 
-          let voterIdArray = []; // Local array for clustered markers
-          let voterAptArray = []; // Local array for apartment info
-          let voterPartyArray = []; // Local array for party info
-          const markerData = group[0];
+        let voterIdArray = []; // Local array for clustered markers
+        let voterAptArray = []; // Local array for apartment info
+        let voterPartyArray = []; // Local array for party info
+        const markerData = group[0];
 
-          const groupHasStrongVoter = group.some(m => String(m.strong_voter).toLowerCase() === "t");
-          const groupHasStrongVoterCount = group.filter(m => String(m.strong_voter).toLowerCase() === "t").length;
-          const groupHasYoungStrongVoter = group.some(m => String(m.young_strong_voter).toLowerCase() === "t");
-          const groupHasYoungStrongVoterCount = group.filter(m => String(m.young_strong_voter).toLowerCase() === "t").length;
-          const groupHasInactive = group.some(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive');
-          const groupHasInactiveCount = group.filter(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive').length;
-          const groupHasNeedsRide = group.some(m => String(m.needs_ride_to_poll).toLowerCase() === "t");
-          const groupHasTrusteeClerk = group.some(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't');
-          const groupHasNeedsRideCount = group.filter(m => String(m.needs_ride_to_poll).toLowerCase() === "t").length;
-          const groupHasTrusteeClerkCount = group.filter(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't').length;
-          const groupHasNeighborhoodMember = group.some(m => Number(m.neighborhood_member_level) > 0);
-          const groupHasNeighborhoodMemberCount = group.filter(m => Number(m.neighborhood_member_level) > 0).length;          
+        const groupHasStrongVoter = group.some(m => String(m.strong_voter).toLowerCase() === "t");
+        const groupHasStrongVoterCount = group.filter(m => String(m.strong_voter).toLowerCase() === "t").length;
+        const groupHasYoungStrongVoter = group.some(m => String(m.young_strong_voter).toLowerCase() === "t");
+        const groupHasYoungStrongVoterCount = group.filter(m => String(m.young_strong_voter).toLowerCase() === "t").length;
+        const groupHasInactive = group.some(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive');
+        const groupHasInactiveCount = group.filter(m => m.voterstatus && m.voterstatus.toLowerCase().trim() === 'inactive').length;
+        const groupHasNeedsRide = group.some(m => String(m.needs_ride_to_poll).toLowerCase() === "t");
+        const groupHasTrusteeClerk = group.some(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't');
+        const groupHasNeedsRideCount = group.filter(m => String(m.needs_ride_to_poll).toLowerCase() === "t").length;
+        const groupHasTrusteeClerkCount = group.filter(m => m.township_trustee_or_clerk && m.township_trustee_or_clerk.toLowerCase() === 't').length;
+        const groupHasNeighborhoodMember = group.some(m => Number(m.neighborhood_member_level) > 0);
+        const groupHasNeighborhoodMemberCount = group.filter(m => Number(m.neighborhood_member_level) > 0).length;          
 
-          let shouldInclude;
+        let shouldInclude;
 
-          //console.log('m.party for group:', group.map(m => m.party)); // Returns valid party values
-          //console.log('Coordinates for group:', group.map(m => `${m.latitude},${m.longitude}`));
+        //console.log('m.party for group:', group.map(m => m.party)); // Returns valid party values
+        //console.log('Coordinates for group:', group.map(m => `${m.latitude},${m.longitude}`));
 
         // ✅ Apply full filter stack for registered voters
         for (const m of group) {
@@ -699,14 +699,12 @@ class ViewportCache {
               //console.log('Processing markerData for apartment cache:', markerData);
               const voterId = markerData.voterid;
 
-              //if (!markerApartmentCache.has(voterId)) {
                 const aptMarkerData = {
                   position: {
                     lat: parseFloat(markerData.latitude),
                     lng: parseFloat(markerData.longitude)
                   },
                   name: `${markerData.first_name} ${markerData.last_name}`,
-                  //address: markerData.address,
                   address: normalizeAddress(markerData.address),
                   voterId: voterId,
                   party: markerData.party,
@@ -719,26 +717,10 @@ class ViewportCache {
                   voterstatus: markerData.voterstatus,
                   needs_ride_to_poll: markerData.needs_ride_to_poll,
                   township_trustee_or_clerk: markerData.township_trustee_or_clerk,
-                  neighborhood_member_level: markerData.neighborhood_member_level
+                  neighborhood_member_level: markerData.neighborhood_member_level,
+                  neighborhood_number: markerData.neighborhood_number
                 };
-              //   //markerApartmentCache.set(voterId, aptMarkerData);
-              //   //console.log('aptMarkerData:', aptMarkerData);
-              //   // Ensure we have an array for this address
-              //   if (!markerApartmentCache[markerData.address]) {
-              //     markerApartmentCache[markerData.address] = [];
-              //   }
 
-              //   // Prevent duplicates by voterId
-              //   const records = markerApartmentCache[markerData.address];
-              //   if (!records.some(r => r.voterId === voterId)) {
-              //     records.push(aptMarkerData);
-              //     //console.log('Added aptMarkerData:', aptMarkerData);
-              //     // console.log('markerApartmentCache just updated:', markerApartmentCache);
-              //     //console.log("Cache updated for address:", markerData.address);
-              //     //console.log("Current records:", markerApartmentCache[markerData.address]);                  
-              //   }                
-              // //}
-                //const addressKey = markerData.address.trim();
                 const addressKey = normalizeAddress(markerData.address);
                 if (!markerApartmentCache[addressKey]) {
                   markerApartmentCache[addressKey] = [];
@@ -791,12 +773,6 @@ class ViewportCache {
               ); // End of reduce
 
               const partySummary = Object.entries(partyCounts).map(([party, count]) => `${party}: ${count}`).join(', ');
-              // Now filter down to only the parties selected in activeFilters
-              // const partySummary = parties
-              //   .filter(p => partyCounts[p]) // only include if there’s a count
-              //   .map(p => `${p}: ${partyCounts[p]}`)
-              //   .join(', ');              
-              //console.log('PartySummary for address where partyfilters:', partySummary,markerData.address,parties);
 
               // Assuming group is your array of marker objects
               const nmlCount = group.reduce((acc, m) => {
@@ -807,19 +783,11 @@ class ViewportCache {
                 return acc;
               }, 0);
 
-              //const nmlSummary = `NML: ${nmlCount}`;
-              // const nmlSummary = nmlCount >= 1 ? `NML: ${nmlCount}` : '';
-              const nmlSummary = '';
-
-              //console.log(nmlSummary);
-              // Example output: "NML: 42"
-
               const tooltipContent = `${address}`;
 
               // Party summary node
               const partyNode = document.createElement('div');
               partyNode.className = 'party-summary';
-              //partyNode.textContent = '${partySummary}';
               partyNode.textContent = partySummary;
               container.appendChild(partyNode);              
 
@@ -841,21 +809,11 @@ class ViewportCache {
               }); // End of marker
 
               // Attach metadata so you can query later
-              //marker.address = markerData.address;
               marker.address = normalizeAddress(markerData.address);
               marker.party = markerData.party;
               marker.voterId = markerData.voterId;
 
-              // // Attach metadata manually
-              // const party = markerData.party;
-              // const precinct = markerData.precinct;
-              // const township = markerData.township;
-              // const ward = markerData.ward;
-              // const supervisor = markerData.supervisor;
-
               marker.metadata = {
-                //address: markerData.address,
-                //party,
                 precinct: markerData.precinct,
                 township: markerData.township,
                 ward: markerData.ward,
@@ -865,7 +823,8 @@ class ViewportCache {
                 voterstatus: markerData.voterstatus,
                 needs_ride_to_poll: markerData.needs_ride_to_poll,
                 township_trustee_or_clerk: markerData.township_trustee_or_clerk,
-                neighborhood_member_level: markerData.neighborhood_member_level
+                neighborhood_member_level: markerData.neighborhood_member_level,
+                neighborhood_number: markerData.neighborhood_number
               };                      
 
               attachClusteredMarkerClick(marker, voterIdArray, voterPartyArray, address, voterAptArray, map, infoWindow, activeFilters);
@@ -873,17 +832,8 @@ class ViewportCache {
               marker.data = markerData; // Stuff things party, etc. 
               markerCache.set(voterIdArray[1], marker); // cache for reuse
               window.allMarkers.push(marker); // For "clustered" Markers
-            } else { // End of if (!markerCache.has(voterIdArray[1]))
-              // console.log('Reusing cached marker for voter ID:', voterIdArray[1], 'at', new Date().toISOString());
-              // const cachedMarker = markerCache.get(voterIdArray[1]);
-              // if (cachedMarker) {
-              //   //cachedMarker.setTitle("Updated Title");
-              //   cachedMarker.title = "Updated Title";
-              //   //cachedMarker.setPosition({ lat: newLat, lng: newLng }); // if needed
-              // }             
             }
           } else { // End if voterIdArray.length > 10
-            //showLoadingMessage();
             group.forEach(markerData => {
               voterIdArray.forEach((id, index) => {
                 if (id === markerData.voterid) {
@@ -940,7 +890,8 @@ class ViewportCache {
                       voterstatus: markerData.voterstatus,
                       needs_ride_to_poll: markerData.needs_ride_to_poll,
                       township_trustee_or_clerk: markerData.township_trustee_or_clerk,
-                      neighborhood_member_level: markerData.neighborhood_member_level
+                      neighborhood_member_level: markerData.neighborhood_member_level,
+                      neighborhood_number: markerData.neighborhood_number
                     };                      
 
                     attachClusteredMarkerClick(marker, voterIdArray, voterPartyArray, address, voterAptArray, map, infoWindow, activeFilters);
@@ -949,7 +900,7 @@ class ViewportCache {
                     markerCache.set(markerData.voterid, marker); // cache for reuse
                     window.allMarkers.push(marker); // For non-clustered Markers
 
-                    //console.log('Created marker for voterid:', markerData.voterid, 'at', new Date().toISOString(), 'with metadata:', marker.metadata);
+                    console.log('Created marker for voterid:', markerData.voterid, 'at', new Date().toISOString(), 'with metadata:', marker.metadata);
                   } // end if if (!markerCache.has(markerData.voterid))
                 } // End of id check
               }); // End of voterIdArray.forEach
@@ -1012,6 +963,7 @@ class ViewportCache {
           const needsRide = voter.needs_ride_to_poll === 't' ? 'Yes' : 'No';
           const trusteeClerk = voter.township_trustee_or_clerk === 't' ? 'Yes' : 'No';
           const neighborhoodMember = Number(voter.neighborhood_member_level) > 0 ? 'Yes' : 'No';
+          const neighborhood_number = voter.neighborhood_number || 'N/A';
 
           return `
             <div style="margin-bottom: 8px;">
@@ -1024,7 +976,8 @@ class ViewportCache {
               Young Strong Voter: ${youngStrong}<br>
               Needs ride to poll: ${needsRide}<br>
               Township Trustee or Clerk: ${trusteeClerk}<br>
-              Neighborhood Member: ${neighborhoodMember}
+              Neighborhood Member: ${neighborhoodMember}<br>
+              Neighborhood Number: ${neighborhood_number}
             </div>
           `;
         }).join('<hr>');
@@ -1436,6 +1389,7 @@ class ViewportCache {
       const isTrusteeClerk = String(metadata.township_trustee_or_clerk).toLowerCase() === "t";
       const isNeighborhoodMember = Number(metadata.neighborhood_member_level) > 0;
       const isNotRegistered = rawParty.toLowerCase() === 'not registered';
+      const hasNeighborhoodNumber = Number(metadata.neighborhood_number) > 0;
 
       let matchesArea = false;
 
@@ -1487,7 +1441,6 @@ class ViewportCache {
 
       let neighborhoodMemberMatch = false;
       if (isApartmentMarker && nmlRequired) {
-        //const lookupKey = marker.address;
         const lookupKey = normalizeAddress(marker.address);
         const apartmentRecords = markerApartmentCache[lookupKey] || [];
 
@@ -1502,7 +1455,6 @@ class ViewportCache {
       let trusteeClerkMatch = false;
 
       if (isApartmentMarker && trusteeClerkRequired) {
-        //const lookupKey = marker.address;
         const lookupKey = normalizeAddress(marker.address);
         const apartmentRecords = markerApartmentCache[lookupKey] || [];
 
@@ -1571,7 +1523,6 @@ class ViewportCache {
       let needsRideMatch = false;
 
       if (isApartmentMarker && needsRideRequired) {
-        //const lookupKey = marker.address;
         const lookupKey = normalizeAddress(marker.address);
         const apartmentRecords = markerApartmentCache[lookupKey] || [];
 
@@ -1585,7 +1536,6 @@ class ViewportCache {
         // For a single marker, check the flag directly
         needsRideMatch = Boolean(marker.needs_ride_to_poll);
       }
-
 
       const matchesFilter =
         (!activeFilters.has('Strong') || isStrongVoter) &&
@@ -1604,7 +1554,6 @@ class ViewportCache {
 
       let shouldBeVisible = false;
       if (isApartmentMarker) {
-        //const lookupKey = marker.address;
         const lookupKey = normalizeAddress(marker.address);
         const apartmentRecords = markerApartmentCache[lookupKey] || [];
         //console.log('lookupKey for apartment marker:', lookupKey, '.apartmentRecords count:', apartmentRecords.length);
@@ -1617,7 +1566,6 @@ class ViewportCache {
 
           const partyMatch = partyMatchForCounting(r, activeFilters);
           //console.log('partyMatchForCounting for voterid:', r.voterid, 'with party:', r.party, 'result:', partyMatch);
-          //if (neighborhoodMemberMatchforCount && partyMatch) {
           if (partyMatch) {
             matchingCount++;
           }
