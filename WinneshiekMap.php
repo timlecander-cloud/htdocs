@@ -274,7 +274,7 @@ class ViewportCache {
 
     <!-- ✅ New Neighborhoods checkbox -->
     <div class="neighborhood_number-filter">
-      <label><input type="checkbox" id="filter-neighborhoods"> Neighborhoods Only</label>
+      <label><input type="checkbox" value="Neighborhood_Number_Only" id="filter-neighborhoods"> Neighborhoods Only</label>
     </div>
 
     <div class="strong-voter-filters">
@@ -900,7 +900,7 @@ class ViewportCache {
                     markerCache.set(markerData.voterid, marker); // cache for reuse
                     window.allMarkers.push(marker); // For non-clustered Markers
 
-                    console.log('Created marker for voterid:', markerData.voterid, 'at', new Date().toISOString(), 'with metadata:', marker.metadata);
+                    //console.log('Created marker for voterid:', markerData.voterid, 'at', new Date().toISOString(), 'with metadata:', marker.metadata);
                   } // end if if (!markerCache.has(markerData.voterid))
                 } // End of id check
               }); // End of voterIdArray.forEach
@@ -963,7 +963,9 @@ class ViewportCache {
           const needsRide = voter.needs_ride_to_poll === 't' ? 'Yes' : 'No';
           const trusteeClerk = voter.township_trustee_or_clerk === 't' ? 'Yes' : 'No';
           const neighborhoodMember = Number(voter.neighborhood_member_level) > 0 ? 'Yes' : 'No';
-          const neighborhood_number = voter.neighborhood_number || 'N/A';
+          //const neighborhood_number = voter.neighborhood_number || 'N/A'; // 12-26-25 neighborhood number is not part of the response
+
+          //console.log('Voter details for info window:', voter.neighborhood_number, voter.first_name, voter.last_name);
 
           return `
             <div style="margin-bottom: 8px;">
@@ -1188,7 +1190,7 @@ class ViewportCache {
       }
     }
 
-    console.log("visibleParties inside rectangle:", [...visibleParties]);
+    //console.log("visibleParties inside rectangle:", [...visibleParties]);
   }
 
   function countPartiesInsideRectangle(bounds) {
@@ -1390,6 +1392,8 @@ class ViewportCache {
       const isNeighborhoodMember = Number(metadata.neighborhood_member_level) > 0;
       const isNotRegistered = rawParty.toLowerCase() === 'not registered';
       const hasNeighborhoodNumber = Number(metadata.neighborhood_number) > 0;
+      //console.log('Evaluating marker for visibility:', marker.address, 'Neighborhood Number:', metadata.neighborhood_number); // Shows neighborhood number
+      //console.log('Neighborhood Number for marker at:', metadata.neighborhood_number, 'hasNeighborhoodNumber:', hasNeighborhoodNumber);
 
       let matchesArea = false;
 
@@ -1428,6 +1432,7 @@ class ViewportCache {
       const youngStrongVoterRequired = activeFilters.has('YoungStrongVoter');
       const inactiveRequired = activeFilters.has('Inactive');
       const needsRideRequired = activeFilters.has('NeedsRide');
+      const neighborhoodNumberRequired = activeFilters.has('Neighborhood_Number_Only');
 
       let partyMatch;
       if (isApartmentMarker) {
@@ -1537,12 +1542,28 @@ class ViewportCache {
         needsRideMatch = Boolean(marker.needs_ride_to_poll);
       }
 
+      let hasNeighborhoodNumberMatch = false;
+
+      if (isApartmentMarker && activeFilters.has('Neighborhood_Number_Only')) {
+        const lookupKey = normalizeAddress(marker.address);
+        const apartmentRecords = markerApartmentCache[lookupKey] || [];
+
+        hasNeighborhoodNumberMatch = apartmentRecords.some(r =>
+          activeFilters.has(r.party) &&
+          Number(r.neighborhood_number) > 0
+        );
+      } else if (!isApartmentMarker && activeFilters.has('Neighborhood_Number_Only')) {
+        hasNeighborhoodNumberMatch = hasNeighborhoodNumber;
+      }
+      //console.log('Marker:', title, '| hasNeighborhoodNumberMatch:', hasNeighborhoodNumberMatch, '| hasNeighborhoodNumber:', hasNeighborhoodNumber);
+
       const matchesFilter =
         (!activeFilters.has('Strong') || isStrongVoter) &&
         (!activeFilters.has('YoungStrong') || isYoungStrongVoter) &&
         (!activeFilters.has('Inactive') || isInactive) &&
         (!activeFilters.has('NeedsRide') || isNeedsRide) &&
         (!activeFilters.has('TrusteeClerk') || isTrusteeClerk) &&
+        (!activeFilters.has('Neighborhood_Number_Only') || hasNeighborhoodNumberMatch) &&
         (!nmlRequired || neighborhoodMemberMatch) &&
         (
           isApartmentMarker
@@ -1551,6 +1572,7 @@ class ViewportCache {
         );
 
       //console.log('Marker:', title, 'TrusteeClerkMatch:', trusteeClerkMatch,'matchesFilter:', matchesFilter); 
+      //console.log('Marker:',title,'| hasNeighborhoodNumberMatch:',hasNeighborhoodNumberMatch,'| matchesFilter:',matchesFilter);
 
       let shouldBeVisible = false;
       if (isApartmentMarker) {
