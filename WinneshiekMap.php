@@ -396,6 +396,9 @@ class ViewportCache {
   let drawnPolygonMarkers = [];
   let currentViewType = null; // track the last drawn type
 
+  let lastViewKey = null;
+  let lastNeighborhoodOnly = null;
+
   // Dropdown population function
   function populateAreaOptions(view) {
     const areaSelector = document.getElementById('areaSelector');
@@ -436,23 +439,23 @@ class ViewportCache {
 
     switch (currentView) {
       case 'township':
-        const townships = selectedArea;
-        if (townships === 'none' || !townships) {
-          return;
-        }
+        // const townships = selectedArea;
+        // if (townships === 'none' || !townships) {
+        //   return;
+        // }
 
         await loadMarkersInBounds(currentView, selectedArea);
         break;
 
       case 'precinct':
-        if (selectedArea === 'none') {
-          //console.log('No precinct selected, hiding all markers');
-          ['DEM', 'REP', 'NP', 'OTH', 'Not registered'].forEach(party => {
-            //console.log(`Hiding markers for party: ${party}`);
-            //setFilterVisibility(party, false); // 10-18-25 07:15 Need to address this separately. This has been deprecated.
-          });
-          return;
-        }
+        // if (selectedArea === 'none') {
+        //   //console.log('No precinct selected, hiding all markers');
+        //   ['DEM', 'REP', 'NP', 'OTH', 'Not registered'].forEach(party => {
+        //     //console.log(`Hiding markers for party: ${party}`);
+        //     //setFilterVisibility(party, false); // 10-18-25 07:15 Need to address this separately. This has been deprecated.
+        //   });
+        //   return;
+        // }
         // handle precinct logic here
         await loadMarkersInBounds(currentView, selectedArea);
         break;
@@ -470,28 +473,41 @@ class ViewportCache {
         return;
     }
 
-    drawPolygons(currentView);
+    //drawPolygons(currentView);
+    const neighborhoodsOnly = document.getElementById("filter-neighborhoods").checked;
+
+    const requestedView = neighborhoodsOnly
+      ? [currentView, "neighborhoods"]
+      : currentView;
+
+    if (shouldRedraw(requestedView, neighborhoodsOnly)) {
+      drawPolygons(requestedView);
+    }
+    
+    //console.log('handleView completed at', new Date().toISOString());
   }
 
-  function drawPolygons(viewType) {
-    if (viewType === currentViewType) return;
+  function shouldRedraw(viewTypes, neighborhoodsOnly) {
+  const viewKey = (Array.isArray(viewTypes) ? viewTypes : [viewTypes])
+    .slice()
+    .sort()
+    .join(",");
 
-    drawnPolygons.forEach((polygon) => polygon.setMap(null));
-    drawnPolygons = [];
+  const changed =
+    viewKey !== lastViewKey ||
+    neighborhoodsOnly !== lastNeighborhoodOnly;
 
-    drawnPolygonMarkers.forEach((marker) => (marker.map = null));
-    drawnPolygonMarkers = [];
+  if (changed) {
+    lastViewKey = viewKey;
+    lastNeighborhoodOnly = neighborhoodsOnly;
+  }
 
-    const viewStyles = {
-      township: { strokeColor: "#0000FF", fillColor: "#0000FF" },
-      precinct: { strokeColor: "#0000FF", fillColor: "#0000FF" },
-      supervisor: { strokeColor: "#0000FF", fillColor: "#0000FF" },
-      neighborhoods: { strokeColor: "#008000", fillColor: "#008000" },
-    };
+  return changed;
+  }
 
-    if (!["township", "precinct", "supervisor","neighborhoods"].includes(viewType)) return;
-
-    fetch(`get_boundaries.php?type=${viewType}`)
+  // Draw ONE boundary layer without clearing anything
+  function drawBoundaryLayer(layerType, style) {
+    return fetch(`get_boundaries.php?type=${layerType}`)
       .then((response) => response.json())
       .then((geojson) => {
         geojson.features.forEach((feature) => {
@@ -507,15 +523,15 @@ class ViewportCache {
 
           rings.forEach((ring) => {
             const path = ring.map((coord) => ({ lat: coord[1], lng: coord[0] }));
-            //console.log('Drawing polygon with path:', path);
+
             const polygon = new google.maps.Polygon({
               paths: path,
-              strokeColor: viewStyles[viewType].strokeColor,
+              strokeColor: style.strokeColor,
               strokeOpacity: 0.8,
               strokeWeight: 2,
-              fillColor: viewStyles[viewType].fillColor,
+              fillColor: style.fillColor,
               fillOpacity: 0.35,
-              clickable: false,   // ✅ prevents swallowing mouse events
+              clickable: false,
             });
 
             const hasOverride =
@@ -532,22 +548,54 @@ class ViewportCache {
 
             const marker = new google.maps.marker.AdvancedMarkerElement({
               position,
-              map, // ✅ now uses the global let map
+              map,
               content: labelDiv,
               collisionBehavior: google.maps.CollisionBehavior.REQUIRED,
             });
-            drawnPolygonMarkers.push(marker);
-            //console.log('Marker created with position:', position);
 
-            polygon.setMap(map); // ✅ now uses the global let map
+            drawnPolygonMarkers.push(marker);
+            polygon.setMap(map);
             drawnPolygons.push(polygon);
           });
         });
-
-        currentViewType = viewType;
-        //console.log(`Successfully drew ${viewType} polygons`);
       })
-      .catch((error) => console.error(`Error loading ${viewType} boundaries:`, error));
+      .catch((error) => console.error(`Error loading ${layerType} boundaries:`, error));
+  }
+
+  // Draw MULTIPLE layers, clearing only when needed
+  function drawPolygons(viewTypes) {
+    const types = Array.isArray(viewTypes) ? viewTypes : [viewTypes];
+
+    const validTypes = ["township", "precinct", "supervisor", "neighborhoods"];
+    const filtered = types.filter((t) => validTypes.includes(t));
+
+    if (filtered.length === 0) return;
+
+    // Create a stable key for the set of layers
+    const newKey = filtered.slice().sort().join(",");
+
+    // Only clear if the requested layer set is different
+    if (newKey !== currentViewType) {
+      drawnPolygons.forEach((polygon) => polygon.setMap(null));
+      drawnPolygons = [];
+
+      drawnPolygonMarkers.forEach((marker) => (marker.map = null));
+      drawnPolygonMarkers = [];
+    }
+
+    const viewStyles = {
+      township:    { strokeColor: "#0000FF", fillColor: "#0000FF" },
+      precinct:    { strokeColor: "#FF0000", fillColor: "#FF0000" },
+      supervisor:  { strokeColor: "#800080", fillColor: "#800080" },
+      neighborhoods: { strokeColor: "#008000", fillColor: "#008000" },
+    };
+
+    // Draw each layer independently
+    filtered.forEach((type) => {
+      drawBoundaryLayer(type, viewStyles[type]);
+    });
+
+    currentViewType = newKey;
   }
 
   function getPolygonCentroid(path) {
@@ -1163,7 +1211,11 @@ class ViewportCache {
     window.currentViewType = "precinct";
     populateAreaOptions("precinct");
     //drawPolygons("precinct");
-    drawPolygons("neighborhoods");
+    //drawPolygons("neighborhoods");
+    //drawPolygons("precinct", "neighborhoods");
+    //drawPolygons(["neighborhoods", "precinct"]);
+
+    drawPolygons(["precinct"]);
   } //end of initMap
 
   function updateVisiblePartiesFromRectangle(bounds) {
@@ -1257,7 +1309,18 @@ class ViewportCache {
     document.getElementById('viewSelector').addEventListener('change', function (e) {
       const selectedView = this.value;
       populateAreaOptions(selectedView);
-      drawPolygons(selectedView);
+      //drawPolygons(selectedView);
+      const neighborhoodsOnly = document.getElementById("filter-neighborhoods").checked;
+
+      const requestedView = neighborhoodsOnly
+        ? [selectedView, "neighborhoods"]
+        : selectedView;
+
+      if (shouldRedraw(requestedView, neighborhoodsOnly)) {
+        drawPolygons(requestedView);
+      }
+
+      //console.log('View changed to:', selectedView);
 
       // Update global view type
       window.currentViewType = selectedView;
@@ -1611,11 +1674,10 @@ class ViewportCache {
         shouldBeVisible = matchesArea && matchesFilter;
       }
 
-
       if (marker.element) {
         marker.element.style.display = shouldBeVisible ? 'block' : 'none';
       }
-      //console.log(`Marker: ${title} | Visible: ${shouldBeVisible}`);
+      console.log(`Marker: ${title} | Visible: ${shouldBeVisible}`);
     }
   } // End of updateMarkerVisibility
 
