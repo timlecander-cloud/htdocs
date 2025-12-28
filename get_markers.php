@@ -278,63 +278,128 @@ try {
 
 	// $query2 .= " ORDER BY p.longitude, p.latitude";
 
+    // $query2 = sprintf(
+    //     "SELECT a.latitude, a.longitude, a.oid_,
+    //         a.addno_full || ' ' ||
+    //         COALESCE(NULLIF(a.st_predir, '') || ' ', '') ||
+    //         a.st_name || ' ' ||
+    //         COALESCE(a.st_postyp, '') ||
+    //         CASE
+    //             WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
+    //                 AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
+    //             THEN ' '
+    //             ELSE ''
+    //         END ||
+    //         COALESCE(NULLIF(a.st_posdir, '') || ' ', '') AS address,
+
+    //         COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
+
+    //         a.full_township AS township,
+    //         a.precinct AS precinct,
+    //         a.city_council_ward AS ward,
+    //         a.county_supervisor AS supervisor,
+    //         a.neighborhood AS neighborhood_number
+
+    //     FROM addresses a
+
+    //     LEFT JOIN persons4 p
+    //     ON a.addno_full = (
+    //             p.house_num || COALESCE(
+    //                 CASE WHEN NULLIF(p.house_suffix, '') IS NOT NULL
+    //                     THEN ' ' || p.house_suffix
+    //                     ELSE ''
+    //                 END, ''
+    //             )
+    //     )
+    //     AND a.st_name = TRIM(p.street_name)
+    //     AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
+    //     AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
+    //     AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
+
+    //     /* -------------------------------
+    //         FIXED UNIT MATCHING LOGIC
+    //         ------------------------------- */
+
+    //     /* Normalize blanks to NULL for comparison */
+    //     AND (
+    //             NULLIF(a.unit_type, '') IS NOT DISTINCT FROM NULLIF(p.unit_type, '')
+    //         )
+    //     AND (
+    //             NULLIF(a.unit_num, '') IS NOT DISTINCT FROM NULLIF(p.unit_num, '')
+    //         )
+
+    //     WHERE p.house_num IS NULL
+    //     AND a.latitude BETWEEN $1 AND $2
+    //     AND a.longitude BETWEEN $3 AND $4
+    //     AND a.latitude IS NOT NULL
+    //     AND a.longitude IS NOT NULL
+    //     AND ($5 = '' OR $5 = 'all' OR a.%s = ANY(string_to_array($5, ',')))
+    //     AND (a.non_residence_entity IS NULL OR TRIM(a.non_residence_entity) = '')",
+
+    //     pg_escape_identifier($conn, $target_field)
+    // );
+
     $query2 = sprintf(
-        "SELECT a.latitude, a.longitude, a.oid_,
-            a.addno_full || ' ' ||
-            COALESCE(NULLIF(a.st_predir, '') || ' ', '') ||
-            a.st_name || ' ' ||
-            COALESCE(a.st_postyp, '') ||
-            CASE
-                WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
-                    AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
-                THEN ' '
-                ELSE ''
-            END ||
-            COALESCE(NULLIF(a.st_posdir, '') || ' ', '') AS address,
+        "SELECT 
+                a.latitude, 
+                a.longitude, 
+                a.oid_,
 
-            COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
+                a.addno_full || ' ' ||
+                COALESCE(NULLIF(a.st_predir, '') || ' ', '') ||
+                a.st_name || ' ' ||
+                COALESCE(a.st_postyp, '') ||
+                CASE
+                    WHEN a.st_postyp IS NOT NULL AND a.st_postyp <> ''
+                        AND a.st_posdir IS NOT NULL AND a.st_posdir <> ''
+                    THEN ' '
+                    ELSE ''
+                END ||
+                COALESCE(NULLIF(a.st_posdir, '') || ' ', '') AS address,
 
-            a.full_township AS township,
-            a.precinct AS precinct,
-            a.city_council_ward AS ward,
-            a.county_supervisor AS supervisor,
-            a.neighborhood AS neighborhood_number
+                COALESCE(' ' || a.unit_type, '') || COALESCE(' ' || a.unit_num, '') AS apartment,
 
-        FROM addresses a
+                a.full_township AS township,
+                a.precinct AS precinct,
+                a.city_council_ward AS ward,
+                a.county_supervisor AS supervisor,
+                a.neighborhood AS neighborhood_number
 
-        LEFT JOIN persons4 p
-        ON a.addno_full = (
-                p.house_num || COALESCE(
-                    CASE WHEN NULLIF(p.house_suffix, '') IS NOT NULL
-                        THEN ' ' || p.house_suffix
-                        ELSE ''
-                    END, ''
+            FROM addresses a
+
+            LEFT JOIN persons4 p
+                ON a.addno_full = (
+                        p.house_num || COALESCE(
+                            CASE 
+                                WHEN NULLIF(p.house_suffix, '') IS NOT NULL
+                                THEN ' ' || p.house_suffix
+                                ELSE ''
+                            END, ''
+                        )
                 )
-        )
-        AND a.st_name = TRIM(p.street_name)
-        AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
-        AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
-        AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
+                AND a.st_name = TRIM(p.street_name)
+                AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
+                AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
+                AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
 
-        /* -------------------------------
-            FIXED UNIT MATCHING LOGIC
-            ------------------------------- */
+                /* -------------------------------
+                NEW: City / Post City Matching
+                ------------------------------- */
+                AND (p.city IS NULL OR p.city = '' OR a.post_city = p.city)
 
-        /* Normalize blanks to NULL for comparison */
-        AND (
-                NULLIF(a.unit_type, '') IS NOT DISTINCT FROM NULLIF(p.unit_type, '')
-            )
-        AND (
-                NULLIF(a.unit_num, '') IS NOT DISTINCT FROM NULLIF(p.unit_num, '')
-            )
+                /* -------------------------------
+                FIXED UNIT MATCHING LOGIC
+                ------------------------------- */
+                AND (NULLIF(a.unit_type, '') IS NOT DISTINCT FROM NULLIF(p.unit_type, ''))
+                AND (NULLIF(a.unit_num, '') IS NOT DISTINCT FROM NULLIF(p.unit_num, ''))
 
-        WHERE p.house_num IS NULL
-        AND a.latitude BETWEEN $1 AND $2
-        AND a.longitude BETWEEN $3 AND $4
-        AND a.latitude IS NOT NULL
-        AND a.longitude IS NOT NULL
-        AND ($5 = '' OR $5 = 'all' OR a.%s = ANY(string_to_array($5, ',')))
-        AND (a.non_residence_entity IS NULL OR TRIM(a.non_residence_entity) = '')",
+            WHERE p.house_num IS NULL
+            AND a.latitude BETWEEN $1 AND $2
+            AND a.longitude BETWEEN $3 AND $4
+            AND a.latitude IS NOT NULL
+            AND a.longitude IS NOT NULL
+            AND ($5 = '' OR $5 = 'all' OR a.%s = ANY(string_to_array($5, ',')))
+            AND (a.non_residence_entity IS NULL OR TRIM(a.non_residence_entity) = '')",
 
         pg_escape_identifier($conn, $target_field)
     );
