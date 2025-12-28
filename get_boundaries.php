@@ -23,6 +23,11 @@ switch ($type) {
         $table = 'township_boundaries';
         $name_column = 'politicalname';
         break;
+
+    case 'neighborhoods':
+        $table = 'neighborhood_boundaries';
+        $name_column = 'neighborhood_number';
+        break;
 }
 
 // Add override_lat/override_lng to the query

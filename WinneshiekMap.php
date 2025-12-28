@@ -486,9 +486,10 @@ class ViewportCache {
       township: { strokeColor: "#0000FF", fillColor: "#0000FF" },
       precinct: { strokeColor: "#0000FF", fillColor: "#0000FF" },
       supervisor: { strokeColor: "#0000FF", fillColor: "#0000FF" },
+      neighborhoods: { strokeColor: "#008000", fillColor: "#008000" },
     };
 
-    if (!["township", "precinct", "supervisor"].includes(viewType)) return;
+    if (!["township", "precinct", "supervisor","neighborhoods"].includes(viewType)) return;
 
     fetch(`get_boundaries.php?type=${viewType}`)
       .then((response) => response.json())
@@ -1161,7 +1162,8 @@ class ViewportCache {
     // Initialize polygons
     window.currentViewType = "precinct";
     populateAreaOptions("precinct");
-    drawPolygons("precinct");
+    //drawPolygons("precinct");
+    drawPolygons("neighborhoods");
   } //end of initMap
 
   function updateVisiblePartiesFromRectangle(bounds) {
