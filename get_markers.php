@@ -133,62 +133,139 @@ try {
     //      ,pg_escape_identifier($conn,$target_field)
     // );
 
+    // $query1 = sprintf(
+    //     "SELECT 
+    //         p.latitude, 
+    //         p.longitude, 
+    //         p.first_name, 
+    //         p.last_name, 
+    //         p.party,
+    //         p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
+    //             COALESCE(p.pre_dir || ' ', '') ||
+    //             p.street_name || ' ' ||
+    //             COALESCE(p.street_type, '') ||
+    //             CASE
+    //                 WHEN p.street_type IS NOT NULL AND p.street_type <> ''
+    //                     AND p.post_dir IS NOT NULL AND p.post_dir <> ''
+    //                 THEN ' '
+    //                 ELSE ''
+    //             END ||
+    //             COALESCE(p.post_dir || ' ', '') AS address,
+    //         COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
+    //         p.full_township AS township, 
+    //         p.precinct AS precinct, 
+    //         p.city_council_ward AS ward, 
+    //         p.county_supervisor AS supervisor, 
+    //         p.voterstatus AS voterstatus, 
+    //         p.regn_num AS voterid,
+    //         p.strong_voter AS strong_voter, 
+    //         p.young_strong_voter AS young_strong_voter,
+    //         p.needs_ride_to_poll AS needs_ride_to_poll, 
+    //         p.township_trustee_clerk AS township_trustee_or_clerk,
+    //         p.neighborhood_member_level AS neighborhood_member_level,
+    //         a.neighborhood AS neighborhood_number
+    //     FROM persons4 p
+    //     LEFT JOIN addresses a
+    //         ON a.addno_full = (
+    //                 p.house_num || COALESCE(
+    //                     CASE WHEN NULLIF(p.house_suffix, '') IS NOT NULL
+    //                         THEN ' ' || p.house_suffix
+    //                         ELSE ''
+    //                     END,
+    //                     ''
+    //                 )
+    //             )
+    //         AND a.st_name = TRIM(p.street_name)
+    //         AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
+    //         AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
+    //         AND (
+    //             (a.unit_num IS NULL AND (p.unit_num IS NULL OR p.unit_num = ''))
+    //             OR (a.unit_num IS NOT NULL AND a.unit_num = p.unit_num)
+    //         )
+    //         AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
+    //     WHERE p.latitude BETWEEN \$1 AND \$2
+    //     AND p.longitude BETWEEN \$3 AND \$4
+    //     AND p.latitude IS NOT NULL
+    //     AND p.longitude IS NOT NULL
+    //     AND p.party = ANY(\$5)
+    //     AND (p.%s = ANY(string_to_array(\$6, ',')) OR \$6 = 'all' OR \$6 = '')",
+    //     pg_escape_identifier($conn, $target_field)
+    // );
+
     $query1 = sprintf(
         "SELECT 
-            p.latitude, 
-            p.longitude, 
-            p.first_name, 
-            p.last_name, 
-            p.party,
-            p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
-                COALESCE(p.pre_dir || ' ', '') ||
-                p.street_name || ' ' ||
-                COALESCE(p.street_type, '') ||
-                CASE
-                    WHEN p.street_type IS NOT NULL AND p.street_type <> ''
-                        AND p.post_dir IS NOT NULL AND p.post_dir <> ''
-                    THEN ' '
-                    ELSE ''
-                END ||
-                COALESCE(p.post_dir || ' ', '') AS address,
-            COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
-            p.full_township AS township, 
-            p.precinct AS precinct, 
-            p.city_council_ward AS ward, 
-            p.county_supervisor AS supervisor, 
-            p.voterstatus AS voterstatus, 
-            p.regn_num AS voterid,
-            p.strong_voter AS strong_voter, 
-            p.young_strong_voter AS young_strong_voter,
-            p.needs_ride_to_poll AS needs_ride_to_poll, 
-            p.township_trustee_clerk AS township_trustee_or_clerk,
-            p.neighborhood_member_level AS neighborhood_member_level,
-            a.neighborhood AS neighborhood_number
-        FROM persons4 p
-        LEFT JOIN addresses a
-            ON a.addno_full = (
-                    p.house_num || COALESCE(
-                        CASE WHEN NULLIF(p.house_suffix, '') IS NOT NULL
-                            THEN ' ' || p.house_suffix
-                            ELSE ''
-                        END,
-                        ''
+                p.latitude, 
+                p.longitude, 
+                p.first_name, 
+                p.last_name, 
+                p.party,
+
+                p.house_num || COALESCE(' ' || p.house_suffix, '') || ' ' ||
+                    COALESCE(p.pre_dir || ' ', '') ||
+                    p.street_name || ' ' ||
+                    COALESCE(p.street_type, '') ||
+                    CASE
+                        WHEN p.street_type IS NOT NULL AND p.street_type <> ''
+                            AND p.post_dir IS NOT NULL AND p.post_dir <> ''
+                        THEN ' '
+                        ELSE ''
+                    END ||
+                    COALESCE(p.post_dir || ' ', '') AS address,
+
+                COALESCE(' ' || p.unit_type, '') || COALESCE(' ' || p.unit_num, '') AS apartment,
+
+                p.full_township AS township, 
+                p.precinct AS precinct, 
+                p.city_council_ward AS ward, 
+                p.county_supervisor AS supervisor, 
+                p.voterstatus AS voterstatus, 
+                p.regn_num AS voterid,
+                p.strong_voter AS strong_voter, 
+                p.young_strong_voter AS young_strong_voter,
+                p.needs_ride_to_poll AS needs_ride_to_poll, 
+                p.township_trustee_clerk AS township_trustee_or_clerk,
+                p.neighborhood_member_level AS neighborhood_member_level,
+                a.neighborhood AS neighborhood_number
+
+            FROM persons4 p
+
+            LEFT JOIN addresses a
+                ON a.addno_full = (
+                        p.house_num || COALESCE(
+                            CASE 
+                                WHEN NULLIF(p.house_suffix, '') IS NOT NULL
+                                THEN ' ' || p.house_suffix
+                                ELSE ''
+                            END,
+                            ''
+                        )
                     )
+                AND a.st_name = TRIM(p.street_name)
+                AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
+                AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
+
+                /* -------------------------------
+                NEW: City / Post City Matching
+                ------------------------------- */
+                AND (p.city IS NULL OR p.city = '' OR a.post_city = p.city)
+
+                /* -------------------------------
+                UNIT MATCHING
+                ------------------------------- */
+                AND (
+                    (a.unit_num IS NULL AND (p.unit_num IS NULL OR p.unit_num = ''))
+                    OR (a.unit_num IS NOT NULL AND a.unit_num = p.unit_num)
                 )
-            AND a.st_name = TRIM(p.street_name)
-            AND (p.pre_dir IS NULL OR p.pre_dir = '' OR a.st_predir = p.pre_dir)
-            AND (p.post_dir IS NULL OR p.post_dir = '' OR a.st_posdir = p.post_dir)
-            AND (
-                (a.unit_num IS NULL AND (p.unit_num IS NULL OR p.unit_num = ''))
-                OR (a.unit_num IS NOT NULL AND a.unit_num = p.unit_num)
-            )
-            AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
-        WHERE p.latitude BETWEEN \$1 AND \$2
-        AND p.longitude BETWEEN \$3 AND \$4
-        AND p.latitude IS NOT NULL
-        AND p.longitude IS NOT NULL
-        AND p.party = ANY(\$5)
-        AND (p.%s = ANY(string_to_array(\$6, ',')) OR \$6 = 'all' OR \$6 = '')",
+
+                AND (p.street_type IS NULL OR p.street_type = '' OR a.st_postyp = p.street_type)
+
+            WHERE p.latitude BETWEEN \$1 AND \$2
+            AND p.longitude BETWEEN \$3 AND \$4
+            AND p.latitude IS NOT NULL
+            AND p.longitude IS NOT NULL
+            AND p.party = ANY(\$5)
+            AND (p.%s = ANY(string_to_array(\$6, ',')) OR \$6 = 'all' OR \$6 = '')",
+
         pg_escape_identifier($conn, $target_field)
     );
 
@@ -344,7 +421,6 @@ try {
                 a.latitude, 
                 a.longitude, 
                 a.oid_,
-
                 a.addno_full || ' ' ||
                 COALESCE(NULLIF(a.st_predir, '') || ' ', '') ||
                 a.st_name || ' ' ||
@@ -363,8 +439,8 @@ try {
                 a.precinct AS precinct,
                 a.city_council_ward AS ward,
                 a.county_supervisor AS supervisor,
-                a.neighborhood AS neighborhood_number
-
+                a.neighborhood AS neighborhood_number,
+                a.assessed_value as assessed_value
             FROM addresses a
 
             LEFT JOIN persons4 p
@@ -432,7 +508,8 @@ try {
             'needs_ride_to_poll' => '',
             'township_trustee_or_clerk' => '',
             'neighborhood_member_level' => '',
-            'neighborhood_number' => $row['neighborhood_number'] ?? ''
+            'neighborhood_number' => $row['neighborhood_number'] ?? '',
+            'assessed_value' => $row['assessed_value'] ?? ''
         ];
     }
 

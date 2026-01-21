@@ -589,6 +589,7 @@ class ViewportCache {
       supervisor:  { strokeColor: "#800080", fillColor: "#800080" },
       neighborhoods: { strokeColor: "#008000", fillColor: "#008000" },
     };
+    //console.log('fill color:', viewStyles.precinct.fillColor);
 
     // Draw each layer independently
     filtered.forEach((type) => {
@@ -668,7 +669,6 @@ class ViewportCache {
 
     const AllParties = 'parties[]=DEM&parties[]=REP&parties[]=NP&parties[]=OTH&parties[]=NOT%20REGISTERED';
 
-    //const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${neighborhoodParam}&${precinctParams}&${wardParams}&${supervisorParams}`;
     const url = `get_markers.php?north=${ne.lat()}&south=${sw.lat()}&east=${ne.lng()}&west=${sw.lng()}&${AllParties}&${townshipParams}&${precinctParams}&${wardParams}&${supervisorParams}`;
     //const url = 'markers.json';
 
@@ -732,8 +732,11 @@ class ViewportCache {
 
           const namesList = group
             .map(m => {
-              if (m.party === 'Not registered') {
-                return `(Not registered) ${m.apartment}`;
+              if (m.party === 'NOT REGISTERED') {
+                //return `(Not registered) ${m.apartment}`;
+                //return `(Not registered) ${m.apartment} — Assessed Value: ${m.assessed_value}`;
+                return `(Not registered) ${m.apartment} — Assessed Value: $${Number(m.assessed_value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                //return `(Nothing registered) ${m.apartment}`;
               } else {
                 return `${m.first_name} ${m.last_name} ${m.apartment} (${m.party})`;
               }
@@ -927,6 +930,14 @@ class ViewportCache {
                       zIndex: 1000 - index
                     }); // End of marker
 
+                    // 3. Insert the flashing logic RIGHT HERE 
+                    if (
+                      markerData.party === 'NOT REGISTERED' && 
+                      Number(markerData.assessed_value) === 0 
+                    ) {
+                      makeMarkerFlash(marker); 
+                    }
+
                     // Attach metadata manually
                     marker.metadata = {
                       party,
@@ -1074,6 +1085,14 @@ class ViewportCache {
       case 'NOT REGISTERED': return '#FFFF00';
       default: return '#000000';
     }
+  }
+
+  function makeMarkerFlash(marker) {
+    let visible = true;
+    return setInterval(() => {
+      visible = !visible;
+      marker.element.style.opacity = visible ? '1' : '0.2';
+    }, 500);
   }
 
   async function initMap() {
@@ -1677,7 +1696,7 @@ class ViewportCache {
       if (marker.element) {
         marker.element.style.display = shouldBeVisible ? 'block' : 'none';
       }
-      console.log(`Marker: ${title} | Visible: ${shouldBeVisible}`);
+      //console.log(`Marker: ${title} | Neieghborhood Number: ${metadata.neighborhood_number} | Neighborhood Number Match: ${hasNeighborhoodNumberMatch} | Visible: ${shouldBeVisible}`);
     }
   } // End of updateMarkerVisibility
 
